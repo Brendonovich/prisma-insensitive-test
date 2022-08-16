@@ -1,0 +1,15 @@
+[package]
+name = "rocketprisma"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[workspace]
+members = [
+    "./prismax"
+]
+[dependencies]
+tokio = {version = "1.19.2",features =["full"]}
+prisma-client-rust = { git = "https://github.com/Brendonovich/prisma-client-rust", rev = "ee0d7d3efebb450ce3275cd06a123d45b5c6eed5"  }
+serde = { version = "1.0.138", features = ["derive"] }
+dotenv = "0.15.0"
