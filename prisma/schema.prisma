@@ -1,0 +1,44 @@
+generator client {
+    // Corresponds to the cargo alias created earlier
+    provider      = "cargo prisma"
+    // The location to generate the schema. Is relative to the position of the schema
+    output        = "../src/prisma.rs"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Activity {
+  ID             String           @id
+  UpdatedAt      DateTime         @default(now())
+  CreatedAt      DateTime         @default(now())
+  Name           String           @unique
+  UserId         String
+  User           User             @relation(fields: [UserId], references: [ID])
+  DeviceActivity DeviceActivity[]
+}
+
+model Device {
+  ID             String           @id
+  Name           String           @unique
+  DeviceActivity DeviceActivity[]
+}
+
+model DeviceActivity {
+  ID         String    @id
+  UpdatedAt  DateTime  @default(now())
+  CreatedAt  DateTime  @default(now())
+  ActivityId String?
+  DeviceId   String
+  Activity   Activity? @relation(fields: [ActivityId], references: [ID])
+  Device     Device    @relation(fields: [DeviceId], references: [ID])
+}
+
+model User {
+  ID       String     @id
+  Name     String     @unique
+  ApiKey   String     @unique
+  Activity Activity[]
+}
