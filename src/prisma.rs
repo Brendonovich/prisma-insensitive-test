@@ -9,20 +9,20 @@ use prisma_client_rust::{
     prisma_models::{InternalDataModelBuilder, PrismaValue},
     queries::{QueryContext, QueryInfo, Result as QueryResult},
     query_core::{
-        executor, schema_builder, BuildMode, CoreError, InterpreterError, QueryExecutor,
-        QueryGraphBuilderError, QuerySchema, QueryValue, Selection,
+        executor, schema_builder, CoreError, InterpreterError, QueryExecutor,
+        QueryGraphBuilderError, QueryValue, Selection,
     },
+    schema::QuerySchema,
     serde_json, BatchResult, Direction, ManyArgs, SerializedWhere, SerializedWhereValue,
     UniqueArgs,
 };
-pub use prisma_client_rust::{queries::Error as QueryError, NewClientError};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::sync::Arc;
-static DATAMODEL_STR : & 'static str = "generator client {\n    // Corresponds to the cargo alias created earlier\n    provider      = \"cargo prisma\"\n    // The location to generate the schema. Is relative to the position of the schema\n    output        = \"../src/prisma.rs\"\n}\n\ndatasource db {\n  provider = \"postgresql\"\n  url      = env(\"DATABASE_URL\")\n}\n\nmodel Activity {\n  ID             String           @id\n  UpdatedAt      DateTime         @default(now())\n  CreatedAt      DateTime         @default(now())\n  Name           String           @unique\n  UserId         String\n  User           User             @relation(fields: [UserId], references: [ID])\n  DeviceActivity DeviceActivity[]\n}\n\nmodel Device {\n  ID             String           @id\n  Name           String           @unique\n  DeviceActivity DeviceActivity[]\n}\n\nmodel DeviceActivity {\n  ID         String    @id\n  UpdatedAt  DateTime  @default(now())\n  CreatedAt  DateTime  @default(now())\n  ActivityId String?\n  DeviceId   String\n  Activity   Activity? @relation(fields: [ActivityId], references: [ID])\n  Device     Device    @relation(fields: [DeviceId], references: [ID])\n}\n\nmodel User {\n  ID       String     @id\n  Name     String     @unique\n  ApiKey   String     @unique\n  Activity Activity[]\n}\n" ;
+static DATAMODEL_STR : & 'static str = "generator client {\n  // Corresponds to the cargo alias created earlier\n  provider = \"cargo prisma\"\n  // The location to generate the schema. Is relative to the position of the schema\n  output   = \"../src/prisma.rs\"\n}\n\ndatasource db {\n  provider = \"postgresql\"\n  url      = env(\"DATABASE_URL\")\n}\n\nmodel Activity {\n  ID             String           @id\n  UpdatedAt      DateTime         @default(now())\n  CreatedAt      DateTime         @default(now())\n  Name           String           @unique\n  UserId         String\n  User           User             @relation(fields: [UserId], references: [ID])\n  DeviceActivity DeviceActivity[]\n}\n\nmodel Device {\n  ID             String           @id\n  Name           String           @unique\n  DeviceActivity DeviceActivity[]\n}\n\nmodel DeviceActivity {\n  ID         String    @id\n  UpdatedAt  DateTime  @default(now())\n  CreatedAt  DateTime  @default(now())\n  ActivityId String?\n  DeviceId   String\n  Activity   Activity? @relation(fields: [ActivityId], references: [ID])\n  Device     Device    @relation(fields: [DeviceId], references: [ID])\n}\n\nmodel User {\n  ID       String     @id\n  Name     String     @unique\n  ApiKey   String     @unique\n  Activity Activity[]\n}\n" ;
 static DATABASE_STR: &'static str = "postgresql";
-pub async fn new_client() -> Result<_prisma::PrismaClient, NewClientError> {
-    let config = parse_configuration(DATAMODEL_STR)?.subject;
+pub async fn new_client() -> Result<_prisma::PrismaClient, ::prisma_client_rust::NewClientError> {
+    let config = ::prisma_client_rust::datamodel::parse_configuration(DATAMODEL_STR)?.subject;
     let source = config
         .datasources
         .first()
@@ -34,9 +34,9 @@ pub async fn new_client() -> Result<_prisma::PrismaClient, NewClientError> {
     };
     let url = if url.starts_with("file:") {
         let path = url.split(":").nth(1).unwrap();
-        if Path::new("./schema.prisma").exists() {
+        if std::path::Path::new("./schema.prisma").exists() {
             url
-        } else if Path::new("./prisma/schema.prisma").exists() {
+        } else if std::path::Path::new("./prisma/schema.prisma").exists() {
             format!("file:./prisma/{}", path)
         } else {
             url
@@ -46,17 +46,21 @@ pub async fn new_client() -> Result<_prisma::PrismaClient, NewClientError> {
     };
     new_client_with_url(&url).await
 }
-pub async fn new_client_with_url(url: &str) -> Result<_prisma::PrismaClient, NewClientError> {
-    let config = parse_configuration(DATAMODEL_STR)?.subject;
+pub async fn new_client_with_url(
+    url: &str,
+) -> Result<_prisma::PrismaClient, ::prisma_client_rust::NewClientError> {
+    let config = ::prisma_client_rust::datamodel::parse_configuration(DATAMODEL_STR)?.subject;
     let source = config
         .datasources
         .first()
         .expect("Please supply a datasource in your schema.prisma file");
-    let (db_name, executor) = executor::load(&source, &[], &url).await?;
-    let internal_model = InternalDataModelBuilder::new(DATAMODEL_STR).build(db_name);
-    let query_schema = Arc::new(schema_builder::build(
+    let (db_name, executor) =
+        ::prisma_client_rust::query_core::executor::load(&source, &[], &url).await?;
+    let internal_model =
+        ::prisma_client_rust::prisma_models::InternalDataModelBuilder::new(DATAMODEL_STR)
+            .build(db_name);
+    let query_schema = std::sync::Arc::new(schema_builder::build(
         internal_model,
-        BuildMode::Modern,
         true,
         source.capabilities(),
         vec![],
@@ -346,7 +350,7 @@ pub mod activity {
         pub struct Link(user::UniqueWhereParam);
         impl From<Link> for SetParam {
             fn from(value: Link) -> Self {
-                Self::LinkUser(value.0)
+                Self::ConnectUser(value.0)
             }
         }
     }
@@ -369,7 +373,7 @@ pub mod activity {
                 self.0 = self.0.with(params.into());
                 self
             }
-            pub fn order_by(mut self, param: device_activity::OrderByParam) -> Self {
+            pub fn order_by(mut self, param: impl Into<device_activity::OrderByParam>) -> Self {
                 self.0 = self.0.order_by(param);
                 self
             }
@@ -398,25 +402,39 @@ pub mod activity {
             Link(params).into()
         }
         pub fn unlink(params: Vec<device_activity::UniqueWhereParam>) -> SetParam {
-            SetParam::UnlinkDeviceActivity(params)
+            SetParam::DisconnectDeviceActivity(params)
+        }
+        pub fn set(params: Vec<device_activity::UniqueWhereParam>) -> SetParam {
+            SetParam::SetDeviceActivity(params)
         }
         pub struct Link(pub Vec<device_activity::UniqueWhereParam>);
         impl From<Link> for SetParam {
             fn from(value: Link) -> Self {
-                Self::LinkDeviceActivity(value.0)
+                Self::ConnectDeviceActivity(value.0)
             }
         }
     }
-    pub fn _outputs() -> Vec<Selection> {
+    pub fn _outputs() -> Vec<::prisma_client_rust::Selection> {
         ["ID", "UpdatedAt", "CreatedAt", "Name", "UserId"]
             .into_iter()
             .map(|o| {
-                let builder = Selection::builder(o);
+                let builder = ::prisma_client_rust::Selection::builder(o);
                 builder.build()
             })
             .collect()
     }
-    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub fn create(
+        id: String,
+        name: String,
+        user: super::user::UniqueWhereParam,
+        _params: Vec<SetParam>,
+    ) -> (String, String, super::user::UniqueWhereParam, Vec<SetParam>) {
+        (id, name, user, _params)
+    }
+    #[macro_export]
+    macro_rules ! _select_activity { ($ ($ field : ident $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? $ ({ $ ($ selections : tt) + }) ?) +) => { { $ crate :: prisma :: activity :: select ! (@ definitions ; $ ($ field $ (($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) *) ? $ ({ $ ($ selections) + }) ?) +) ; Select ($ crate :: prisma :: activity :: select ! (@ select_fields_to_selections ; $ ($ field $ (($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) *) ? $ ({ $ ($ selections) + }) ?) +)) } } ; (@ definitions ; $ ($ field : ident $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? $ ({ $ ($ selections : tt) + }) ?) +) => { # [allow (warnings)] enum Fields { id , updated_at , created_at , name , user_id , user , device_activity } # [allow (warnings)] impl Fields { fn selections () { $ (let _ = Fields :: $ field ;) + } } # [derive (:: serde :: Deserialize , :: serde :: Serialize)] # [allow (warnings)] pub struct Data { $ ($ field : $ crate :: prisma :: activity :: select ! (@ field_type ; $ field $ ({ $ ($ selections) + }) ?) ,) + } $ ($ (pub mod $ field { $ crate :: prisma :: activity :: select ! (@ field_module ; $ field { $ ($ selections) + }) ; }) ?) + pub struct Select (pub Vec < :: prisma_client_rust :: Selection >) ; impl :: prisma_client_rust :: select :: SelectType < $ crate :: prisma :: activity :: Data > for Select { type Data = Data ; fn to_selections (self) -> Vec < :: prisma_client_rust :: Selection > { self . 0 } } } ; (@ field_type ; id) => { String } ; (@ field_type ; updated_at) => { chrono :: DateTime < chrono :: FixedOffset > } ; (@ field_type ; created_at) => { chrono :: DateTime < chrono :: FixedOffset > } ; (@ field_type ; name) => { String } ; (@ field_type ; user_id) => { String } ; (@ field_type ; user { $ ($ selections : tt) + }) => { user :: Data } ; (@ field_type ; user) => { crate :: prisma :: user :: Data } ; (@ field_type ; device_activity { $ ($ selections : tt) + }) => { Vec < device_activity :: Data > } ; (@ field_type ; device_activity) => { Vec < crate :: prisma :: device_activity :: Data > } ; (@ field_type ; $ field : ident $ ($ tokens : tt) *) => { compile_error ! (stringify ! (Cannot select field nonexistent field $ field on model activity)) } ; (@ field_module ; user { $ ($ selections : tt) + }) => { $ crate :: prisma :: user :: select ! (@ definitions ; $ ($ selections) +) ; } ; (@ field_module ; device_activity { $ ($ selections : tt) + }) => { $ crate :: prisma :: device_activity :: select ! (@ definitions ; $ ($ selections) +) ; } ; (@ field_module ; $ ($ tokens : tt) *) => { } ; (@ select_fields_to_selections ; $ ($ field : ident $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? $ ({ $ ($ selections : tt) + }) ?) +) => { vec ! [$ ($ crate :: prisma :: activity :: select ! (@ select_field_to_selection ; $ field $ (($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) *) ? $ ({ $ ($ selections) + }) ?)) , +] } ; (@ select_field_to_selection ; id) => { :: prisma_client_rust :: Selection :: builder ("ID") . build () } ; (@ select_field_to_selection ; updated_at) => { :: prisma_client_rust :: Selection :: builder ("UpdatedAt") . build () } ; (@ select_field_to_selection ; created_at) => { :: prisma_client_rust :: Selection :: builder ("CreatedAt") . build () } ; (@ select_field_to_selection ; name) => { :: prisma_client_rust :: Selection :: builder ("Name") . build () } ; (@ select_field_to_selection ; user_id) => { :: prisma_client_rust :: Selection :: builder ("UserId") . build () } ; (@ select_field_to_selection ; user $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? { $ ($ selections : tt) + }) => { { # [allow (warnings)] let mut selection = :: prisma_client_rust :: Selection :: builder ("User") ; $ (let args = $ crate :: prisma :: user :: ManyArgs :: new ($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) * ; selection . set_arguments (args . to_graphql () . 0) ;) ? selection . nested_selections ($ crate :: prisma :: user :: select ! (@ select_fields_to_selections ; $ ($ selections) +)) ; selection . build () } } ; (@ select_field_to_selection ; user $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ?) => { { # [allow (warnings)] let mut selection = :: prisma_client_rust :: Selection :: builder ("User") ; $ (let args = $ crate :: prisma :: user :: ManyArgs :: new ($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) * ; selection . set_arguments (args . to_graphql () . 0) ;) ? selection . nested_selections ($ crate :: prisma :: user :: _outputs ()) ; selection . build () } } ; (@ select_field_to_selection ; device_activity $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? { $ ($ selections : tt) + }) => { { # [allow (warnings)] let mut selection = :: prisma_client_rust :: Selection :: builder ("DeviceActivity") ; $ (let args = $ crate :: prisma :: device_activity :: ManyArgs :: new ($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) * ; selection . set_arguments (args . to_graphql () . 0) ;) ? selection . nested_selections ($ crate :: prisma :: device_activity :: select ! (@ select_fields_to_selections ; $ ($ selections) +)) ; selection . build () } } ; (@ select_field_to_selection ; device_activity $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ?) => { { # [allow (warnings)] let mut selection = :: prisma_client_rust :: Selection :: builder ("DeviceActivity") ; $ (let args = $ crate :: prisma :: device_activity :: ManyArgs :: new ($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) * ; selection . set_arguments (args . to_graphql () . 0) ;) ? selection . nested_selections ($ crate :: prisma :: device_activity :: _outputs ()) ; selection . build () } } ; (@ select_field_to_selection ; $ ($ tokens : tt) *) => { :: prisma_client_rust :: Selection :: builder ("") . build () } ; }
+    pub use _select_activity as select;
+    #[derive(Debug, Clone, :: serde :: Serialize, :: serde :: Deserialize)]
     pub struct Data {
         #[serde(rename = "ID")]
         pub id: String,
@@ -437,11 +455,11 @@ pub mod activity {
         pub fn user(&self) -> Result<&super::user::Data, &'static str> {
             self.user
                 .as_ref()
-                .ok_or("Attempted to access 'user' but did not fetch it using the .with() syntax")
+                .ok_or("Attempted to acccess 'user' but did not fetch it using the .with() syntax")
                 .map(|v| v.as_ref())
         }
         pub fn device_activity(&self) -> Result<&Vec<super::device_activity::Data>, &'static str> {
-            self . device_activity . as_ref () . ok_or ("Attempted to access 'device_activity' but did not fetch it using the .with() syntax")
+            self . device_activity . as_ref () . ok_or ("Attempted to acccess 'device_activity' but did not fetch it using the .with() syntax")
         }
     }
     #[derive(Clone)]
@@ -449,20 +467,24 @@ pub mod activity {
         User(super::user::UniqueArgs),
         DeviceActivity(super::device_activity::ManyArgs),
     }
-    impl Into<Selection> for WithParam {
-        fn into(self) -> Selection {
+    impl Into<::prisma_client_rust::Selection> for WithParam {
+        fn into(self) -> ::prisma_client_rust::Selection {
             match self {
                 Self::User(args) => {
                     let mut selections = super::user::_outputs();
-                    selections.extend(args.with_params.into_iter().map(Into::<Selection>::into));
-                    let mut builder = Selection::builder("User");
+                    selections.extend(
+                        args.with_params
+                            .into_iter()
+                            .map(Into::<::prisma_client_rust::Selection>::into),
+                    );
+                    let mut builder = ::prisma_client_rust::Selection::builder("User");
                     builder.nested_selections(selections);
                     builder.build()
                 }
                 Self::DeviceActivity(args) => {
                     let (arguments, mut nested_selections) = args.to_graphql();
                     nested_selections.extend(super::device_activity::_outputs());
-                    let mut builder = Selection::builder("DeviceActivity");
+                    let mut builder = ::prisma_client_rust::Selection::builder("DeviceActivity");
                     builder
                         .nested_selections(nested_selections)
                         .set_arguments(arguments);
@@ -478,12 +500,13 @@ pub mod activity {
         SetCreatedAt(chrono::DateTime<chrono::FixedOffset>),
         SetName(String),
         SetUserId(String),
-        LinkUser(super::user::UniqueWhereParam),
-        LinkDeviceActivity(Vec<super::device_activity::UniqueWhereParam>),
-        UnlinkDeviceActivity(Vec<super::device_activity::UniqueWhereParam>),
+        ConnectUser(super::user::UniqueWhereParam),
+        ConnectDeviceActivity(Vec<super::device_activity::UniqueWhereParam>),
+        DisconnectDeviceActivity(Vec<super::device_activity::UniqueWhereParam>),
+        SetDeviceActivity(Vec<super::device_activity::UniqueWhereParam>),
     }
-    impl Into<(String, PrismaValue)> for SetParam {
-        fn into(self) -> (String, PrismaValue) {
+    impl Into<(String, ::prisma_client_rust::PrismaValue)> for SetParam {
+        fn into(self) -> (String, ::prisma_client_rust::PrismaValue) {
             match self {
                 SetParam::SetId(value) => ("ID".to_string(), PrismaValue::String(value)),
                 SetParam::SetUpdatedAt(value) => {
@@ -494,44 +517,61 @@ pub mod activity {
                 }
                 SetParam::SetName(value) => ("Name".to_string(), PrismaValue::String(value)),
                 SetParam::SetUserId(value) => ("UserId".to_string(), PrismaValue::String(value)),
-                SetParam::LinkUser(where_param) => (
+                SetParam::ConnectUser(where_param) => (
                     "User".to_string(),
-                    PrismaValue::Object(vec![(
+                    ::prisma_client_rust::PrismaValue::Object(vec![(
                         "connect".to_string(),
-                        PrismaValue::Object(
-                            vec![where_param]
+                        ::prisma_client_rust::PrismaValue::Object(
+                            [where_param]
                                 .into_iter()
                                 .map(Into::<super::user::WhereParam>::into)
-                                .map(Into::<SerializedWhere>::into)
-                                .map(SerializedWhere::transform_equals)
+                                .map(Into::<::prisma_client_rust::SerializedWhere>::into)
+                                .map(::prisma_client_rust::SerializedWhere::transform_equals)
                                 .collect(),
                         ),
                     )]),
                 ),
-                SetParam::LinkDeviceActivity(where_params) => (
+                SetParam::ConnectDeviceActivity(where_params) => (
                     "DeviceActivity".to_string(),
-                    PrismaValue::Object(vec![(
+                    ::prisma_client_rust::PrismaValue::Object(vec![(
                         "connect".to_string(),
-                        PrismaValue::Object(
+                        ::prisma_client_rust::PrismaValue::List(
                             where_params
                                 .into_iter()
                                 .map(Into::<super::device_activity::WhereParam>::into)
-                                .map(Into::<SerializedWhere>::into)
-                                .map(SerializedWhere::transform_equals)
+                                .map(Into::<::prisma_client_rust::SerializedWhere>::into)
+                                .map(::prisma_client_rust::SerializedWhere::transform_equals)
+                                .map(|v| ::prisma_client_rust::PrismaValue::Object(vec![v]))
                                 .collect(),
                         ),
                     )]),
                 ),
-                SetParam::UnlinkDeviceActivity(where_params) => (
+                SetParam::DisconnectDeviceActivity(where_params) => (
                     "DeviceActivity".to_string(),
-                    PrismaValue::Object(vec![(
+                    ::prisma_client_rust::PrismaValue::Object(vec![(
                         "disconnect".to_string(),
-                        PrismaValue::Object(
+                        ::prisma_client_rust::PrismaValue::List(
                             where_params
                                 .into_iter()
                                 .map(Into::<super::device_activity::WhereParam>::into)
-                                .map(Into::<SerializedWhere>::into)
-                                .map(SerializedWhere::transform_equals)
+                                .map(Into::<::prisma_client_rust::SerializedWhere>::into)
+                                .map(::prisma_client_rust::SerializedWhere::transform_equals)
+                                .map(|v| ::prisma_client_rust::PrismaValue::Object(vec![v]))
+                                .collect(),
+                        ),
+                    )]),
+                ),
+                SetParam::SetDeviceActivity(where_params) => (
+                    "DeviceActivity".to_string(),
+                    ::prisma_client_rust::PrismaValue::Object(vec![(
+                        "set".to_string(),
+                        ::prisma_client_rust::PrismaValue::List(
+                            where_params
+                                .into_iter()
+                                .map(Into::<super::device_activity::WhereParam>::into)
+                                .map(Into::<::prisma_client_rust::SerializedWhere>::into)
+                                .map(::prisma_client_rust::SerializedWhere::transform_equals)
+                                .map(|v| ::prisma_client_rust::PrismaValue::Object(vec![v]))
                                 .collect(),
                         ),
                     )]),
@@ -547,27 +587,28 @@ pub mod activity {
         Name(Direction),
         UserId(Direction),
     }
-    impl Into<(String, PrismaValue)> for OrderByParam {
-        fn into(self) -> (String, PrismaValue) {
+    impl Into<(String, ::prisma_client_rust::PrismaValue)> for OrderByParam {
+        fn into(self) -> (String, ::prisma_client_rust::PrismaValue) {
             match self {
-                Self::Id(direction) => {
-                    ("ID".to_string(), PrismaValue::String(direction.to_string()))
-                }
+                Self::Id(direction) => (
+                    "ID".to_string(),
+                    ::prisma_client_rust::PrismaValue::String(direction.to_string()),
+                ),
                 Self::UpdatedAt(direction) => (
                     "UpdatedAt".to_string(),
-                    PrismaValue::String(direction.to_string()),
+                    ::prisma_client_rust::PrismaValue::String(direction.to_string()),
                 ),
                 Self::CreatedAt(direction) => (
                     "CreatedAt".to_string(),
-                    PrismaValue::String(direction.to_string()),
+                    ::prisma_client_rust::PrismaValue::String(direction.to_string()),
                 ),
                 Self::Name(direction) => (
                     "Name".to_string(),
-                    PrismaValue::String(direction.to_string()),
+                    ::prisma_client_rust::PrismaValue::String(direction.to_string()),
                 ),
                 Self::UserId(direction) => (
                     "UserId".to_string(),
-                    PrismaValue::String(direction.to_string()),
+                    ::prisma_client_rust::PrismaValue::String(direction.to_string()),
                 ),
             }
         }
@@ -577,8 +618,8 @@ pub mod activity {
         Id(String),
         Name(String),
     }
-    impl Into<(String, PrismaValue)> for Cursor {
-        fn into(self) -> (String, PrismaValue) {
+    impl Into<(String, ::prisma_client_rust::PrismaValue)> for Cursor {
+        fn into(self) -> (String, ::prisma_client_rust::PrismaValue) {
             match self {
                 Self::Id(cursor) => ("ID".to_string(), PrismaValue::String(cursor)),
                 Self::Name(cursor) => ("Name".to_string(), PrismaValue::String(cursor)),
@@ -648,139 +689,139 @@ pub mod activity {
         DeviceActivityEvery(Vec<super::device_activity::WhereParam>),
         DeviceActivityNone(Vec<super::device_activity::WhereParam>),
     }
-    impl Into<SerializedWhere> for WhereParam {
-        fn into(self) -> SerializedWhere {
+    impl Into<::prisma_client_rust::SerializedWhere> for WhereParam {
+        fn into(self) -> ::prisma_client_rust::SerializedWhere {
             match self {
-                Self::Not(value) => SerializedWhere::new(
+                Self::Not(value) => ::prisma_client_rust::SerializedWhere::new(
                     "NOT",
-                    SerializedWhereValue::Object(
+                    ::prisma_client_rust::SerializedWhereValue::Object(
                         value
                             .into_iter()
-                            .map(Into::<SerializedWhere>::into)
+                            .map(Into::<::prisma_client_rust::SerializedWhere>::into)
                             .map(Into::into)
                             .collect(),
                     ),
                 ),
-                Self::Or(value) => SerializedWhere::new(
+                Self::Or(value) => ::prisma_client_rust::SerializedWhere::new(
                     "OR",
-                    SerializedWhereValue::List(
+                    ::prisma_client_rust::SerializedWhereValue::List(
                         value
                             .into_iter()
-                            .map(Into::<SerializedWhere>::into)
+                            .map(Into::<::prisma_client_rust::SerializedWhere>::into)
                             .map(Into::into)
                             .map(|v| vec![v])
-                            .map(PrismaValue::Object)
+                            .map(::prisma_client_rust::PrismaValue::Object)
                             .collect(),
                     ),
                 ),
-                Self::And(value) => SerializedWhere::new(
+                Self::And(value) => ::prisma_client_rust::SerializedWhere::new(
                     "AND",
-                    SerializedWhereValue::Object(
+                    ::prisma_client_rust::SerializedWhereValue::Object(
                         value
                             .into_iter()
-                            .map(Into::<SerializedWhere>::into)
+                            .map(Into::<::prisma_client_rust::SerializedWhere>::into)
                             .map(Into::into)
                             .collect(),
                     ),
                 ),
-                Self::IdEquals(value) => SerializedWhere::new(
+                Self::IdEquals(value) => ::prisma_client_rust::SerializedWhere::new(
                     "ID",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "equals".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::IdInVec(value) => SerializedWhere::new(
+                Self::IdInVec(value) => ::prisma_client_rust::SerializedWhere::new(
                     "ID",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "in".to_string(),
                         PrismaValue::List(
                             value.into_iter().map(|v| PrismaValue::String(v)).collect(),
                         ),
                     )]),
                 ),
-                Self::IdNotInVec(value) => SerializedWhere::new(
+                Self::IdNotInVec(value) => ::prisma_client_rust::SerializedWhere::new(
                     "ID",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "notIn".to_string(),
                         PrismaValue::List(
                             value.into_iter().map(|v| PrismaValue::String(v)).collect(),
                         ),
                     )]),
                 ),
-                Self::IdLt(value) => SerializedWhere::new(
+                Self::IdLt(value) => ::prisma_client_rust::SerializedWhere::new(
                     "ID",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "lt".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::IdLte(value) => SerializedWhere::new(
+                Self::IdLte(value) => ::prisma_client_rust::SerializedWhere::new(
                     "ID",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "lte".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::IdGt(value) => SerializedWhere::new(
+                Self::IdGt(value) => ::prisma_client_rust::SerializedWhere::new(
                     "ID",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "gt".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::IdGte(value) => SerializedWhere::new(
+                Self::IdGte(value) => ::prisma_client_rust::SerializedWhere::new(
                     "ID",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "gte".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::IdContains(value) => SerializedWhere::new(
+                Self::IdContains(value) => ::prisma_client_rust::SerializedWhere::new(
                     "ID",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "contains".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::IdStartsWith(value) => SerializedWhere::new(
+                Self::IdStartsWith(value) => ::prisma_client_rust::SerializedWhere::new(
                     "ID",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "startsWith".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::IdEndsWith(value) => SerializedWhere::new(
+                Self::IdEndsWith(value) => ::prisma_client_rust::SerializedWhere::new(
                     "ID",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "endsWith".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::IdMode(value) => SerializedWhere::new(
+                Self::IdMode(value) => ::prisma_client_rust::SerializedWhere::new(
                     "ID",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "mode".to_string(),
                         PrismaValue::Enum(value.to_string()),
                     )]),
                 ),
-                Self::IdNot(value) => SerializedWhere::new(
+                Self::IdNot(value) => ::prisma_client_rust::SerializedWhere::new(
                     "ID",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "not".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::UpdatedAtEquals(value) => SerializedWhere::new(
+                Self::UpdatedAtEquals(value) => ::prisma_client_rust::SerializedWhere::new(
                     "UpdatedAt",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "equals".to_string(),
                         PrismaValue::DateTime(value),
                     )]),
                 ),
-                Self::UpdatedAtInVec(value) => SerializedWhere::new(
+                Self::UpdatedAtInVec(value) => ::prisma_client_rust::SerializedWhere::new(
                     "UpdatedAt",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "in".to_string(),
                         PrismaValue::List(
                             value
@@ -790,9 +831,9 @@ pub mod activity {
                         ),
                     )]),
                 ),
-                Self::UpdatedAtNotInVec(value) => SerializedWhere::new(
+                Self::UpdatedAtNotInVec(value) => ::prisma_client_rust::SerializedWhere::new(
                     "UpdatedAt",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "notIn".to_string(),
                         PrismaValue::List(
                             value
@@ -802,51 +843,51 @@ pub mod activity {
                         ),
                     )]),
                 ),
-                Self::UpdatedAtLt(value) => SerializedWhere::new(
+                Self::UpdatedAtLt(value) => ::prisma_client_rust::SerializedWhere::new(
                     "UpdatedAt",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "lt".to_string(),
                         PrismaValue::DateTime(value),
                     )]),
                 ),
-                Self::UpdatedAtLte(value) => SerializedWhere::new(
+                Self::UpdatedAtLte(value) => ::prisma_client_rust::SerializedWhere::new(
                     "UpdatedAt",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "lte".to_string(),
                         PrismaValue::DateTime(value),
                     )]),
                 ),
-                Self::UpdatedAtGt(value) => SerializedWhere::new(
+                Self::UpdatedAtGt(value) => ::prisma_client_rust::SerializedWhere::new(
                     "UpdatedAt",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "gt".to_string(),
                         PrismaValue::DateTime(value),
                     )]),
                 ),
-                Self::UpdatedAtGte(value) => SerializedWhere::new(
+                Self::UpdatedAtGte(value) => ::prisma_client_rust::SerializedWhere::new(
                     "UpdatedAt",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "gte".to_string(),
                         PrismaValue::DateTime(value),
                     )]),
                 ),
-                Self::UpdatedAtNot(value) => SerializedWhere::new(
+                Self::UpdatedAtNot(value) => ::prisma_client_rust::SerializedWhere::new(
                     "UpdatedAt",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "not".to_string(),
                         PrismaValue::DateTime(value),
                     )]),
                 ),
-                Self::CreatedAtEquals(value) => SerializedWhere::new(
+                Self::CreatedAtEquals(value) => ::prisma_client_rust::SerializedWhere::new(
                     "CreatedAt",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "equals".to_string(),
                         PrismaValue::DateTime(value),
                     )]),
                 ),
-                Self::CreatedAtInVec(value) => SerializedWhere::new(
+                Self::CreatedAtInVec(value) => ::prisma_client_rust::SerializedWhere::new(
                     "CreatedAt",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "in".to_string(),
                         PrismaValue::List(
                             value
@@ -856,9 +897,9 @@ pub mod activity {
                         ),
                     )]),
                 ),
-                Self::CreatedAtNotInVec(value) => SerializedWhere::new(
+                Self::CreatedAtNotInVec(value) => ::prisma_client_rust::SerializedWhere::new(
                     "CreatedAt",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "notIn".to_string(),
                         PrismaValue::List(
                             value
@@ -868,282 +909,288 @@ pub mod activity {
                         ),
                     )]),
                 ),
-                Self::CreatedAtLt(value) => SerializedWhere::new(
+                Self::CreatedAtLt(value) => ::prisma_client_rust::SerializedWhere::new(
                     "CreatedAt",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "lt".to_string(),
                         PrismaValue::DateTime(value),
                     )]),
                 ),
-                Self::CreatedAtLte(value) => SerializedWhere::new(
+                Self::CreatedAtLte(value) => ::prisma_client_rust::SerializedWhere::new(
                     "CreatedAt",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "lte".to_string(),
                         PrismaValue::DateTime(value),
                     )]),
                 ),
-                Self::CreatedAtGt(value) => SerializedWhere::new(
+                Self::CreatedAtGt(value) => ::prisma_client_rust::SerializedWhere::new(
                     "CreatedAt",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "gt".to_string(),
                         PrismaValue::DateTime(value),
                     )]),
                 ),
-                Self::CreatedAtGte(value) => SerializedWhere::new(
+                Self::CreatedAtGte(value) => ::prisma_client_rust::SerializedWhere::new(
                     "CreatedAt",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "gte".to_string(),
                         PrismaValue::DateTime(value),
                     )]),
                 ),
-                Self::CreatedAtNot(value) => SerializedWhere::new(
+                Self::CreatedAtNot(value) => ::prisma_client_rust::SerializedWhere::new(
                     "CreatedAt",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "not".to_string(),
                         PrismaValue::DateTime(value),
                     )]),
                 ),
-                Self::NameEquals(value) => SerializedWhere::new(
+                Self::NameEquals(value) => ::prisma_client_rust::SerializedWhere::new(
                     "Name",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "equals".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::NameInVec(value) => SerializedWhere::new(
+                Self::NameInVec(value) => ::prisma_client_rust::SerializedWhere::new(
                     "Name",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "in".to_string(),
                         PrismaValue::List(
                             value.into_iter().map(|v| PrismaValue::String(v)).collect(),
                         ),
                     )]),
                 ),
-                Self::NameNotInVec(value) => SerializedWhere::new(
+                Self::NameNotInVec(value) => ::prisma_client_rust::SerializedWhere::new(
                     "Name",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "notIn".to_string(),
                         PrismaValue::List(
                             value.into_iter().map(|v| PrismaValue::String(v)).collect(),
                         ),
                     )]),
                 ),
-                Self::NameLt(value) => SerializedWhere::new(
+                Self::NameLt(value) => ::prisma_client_rust::SerializedWhere::new(
                     "Name",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "lt".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::NameLte(value) => SerializedWhere::new(
+                Self::NameLte(value) => ::prisma_client_rust::SerializedWhere::new(
                     "Name",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "lte".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::NameGt(value) => SerializedWhere::new(
+                Self::NameGt(value) => ::prisma_client_rust::SerializedWhere::new(
                     "Name",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "gt".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::NameGte(value) => SerializedWhere::new(
+                Self::NameGte(value) => ::prisma_client_rust::SerializedWhere::new(
                     "Name",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "gte".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::NameContains(value) => SerializedWhere::new(
+                Self::NameContains(value) => ::prisma_client_rust::SerializedWhere::new(
                     "Name",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "contains".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::NameStartsWith(value) => SerializedWhere::new(
+                Self::NameStartsWith(value) => ::prisma_client_rust::SerializedWhere::new(
                     "Name",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "startsWith".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::NameEndsWith(value) => SerializedWhere::new(
+                Self::NameEndsWith(value) => ::prisma_client_rust::SerializedWhere::new(
                     "Name",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "endsWith".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::NameMode(value) => SerializedWhere::new(
+                Self::NameMode(value) => ::prisma_client_rust::SerializedWhere::new(
                     "Name",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "mode".to_string(),
                         PrismaValue::Enum(value.to_string()),
                     )]),
                 ),
-                Self::NameNot(value) => SerializedWhere::new(
+                Self::NameNot(value) => ::prisma_client_rust::SerializedWhere::new(
                     "Name",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "not".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::UserIdEquals(value) => SerializedWhere::new(
+                Self::UserIdEquals(value) => ::prisma_client_rust::SerializedWhere::new(
                     "UserId",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "equals".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::UserIdInVec(value) => SerializedWhere::new(
+                Self::UserIdInVec(value) => ::prisma_client_rust::SerializedWhere::new(
                     "UserId",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "in".to_string(),
                         PrismaValue::List(
                             value.into_iter().map(|v| PrismaValue::String(v)).collect(),
                         ),
                     )]),
                 ),
-                Self::UserIdNotInVec(value) => SerializedWhere::new(
+                Self::UserIdNotInVec(value) => ::prisma_client_rust::SerializedWhere::new(
                     "UserId",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "notIn".to_string(),
                         PrismaValue::List(
                             value.into_iter().map(|v| PrismaValue::String(v)).collect(),
                         ),
                     )]),
                 ),
-                Self::UserIdLt(value) => SerializedWhere::new(
+                Self::UserIdLt(value) => ::prisma_client_rust::SerializedWhere::new(
                     "UserId",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "lt".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::UserIdLte(value) => SerializedWhere::new(
+                Self::UserIdLte(value) => ::prisma_client_rust::SerializedWhere::new(
                     "UserId",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "lte".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::UserIdGt(value) => SerializedWhere::new(
+                Self::UserIdGt(value) => ::prisma_client_rust::SerializedWhere::new(
                     "UserId",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "gt".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::UserIdGte(value) => SerializedWhere::new(
+                Self::UserIdGte(value) => ::prisma_client_rust::SerializedWhere::new(
                     "UserId",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "gte".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::UserIdContains(value) => SerializedWhere::new(
+                Self::UserIdContains(value) => ::prisma_client_rust::SerializedWhere::new(
                     "UserId",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "contains".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::UserIdStartsWith(value) => SerializedWhere::new(
+                Self::UserIdStartsWith(value) => ::prisma_client_rust::SerializedWhere::new(
                     "UserId",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "startsWith".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::UserIdEndsWith(value) => SerializedWhere::new(
+                Self::UserIdEndsWith(value) => ::prisma_client_rust::SerializedWhere::new(
                     "UserId",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "endsWith".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::UserIdMode(value) => SerializedWhere::new(
+                Self::UserIdMode(value) => ::prisma_client_rust::SerializedWhere::new(
                     "UserId",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "mode".to_string(),
                         PrismaValue::Enum(value.to_string()),
                     )]),
                 ),
-                Self::UserIdNot(value) => SerializedWhere::new(
+                Self::UserIdNot(value) => ::prisma_client_rust::SerializedWhere::new(
                     "UserId",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "not".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::UserIs(where_params) => SerializedWhere::new(
+                Self::UserIs(where_params) => ::prisma_client_rust::SerializedWhere::new(
                     "User",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "is".to_string(),
-                        PrismaValue::Object(
+                        ::prisma_client_rust::PrismaValue::Object(
                             where_params
                                 .into_iter()
-                                .map(Into::<SerializedWhere>::into)
-                                .map(SerializedWhere::transform_equals)
+                                .map(Into::<::prisma_client_rust::SerializedWhere>::into)
+                                .map(::prisma_client_rust::SerializedWhere::transform_equals)
                                 .collect(),
                         ),
                     )]),
                 ),
-                Self::UserIsNot(where_params) => SerializedWhere::new(
+                Self::UserIsNot(where_params) => ::prisma_client_rust::SerializedWhere::new(
                     "User",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "isNot".to_string(),
-                        PrismaValue::Object(
+                        ::prisma_client_rust::PrismaValue::Object(
                             where_params
                                 .into_iter()
-                                .map(Into::<SerializedWhere>::into)
-                                .map(SerializedWhere::transform_equals)
+                                .map(Into::<::prisma_client_rust::SerializedWhere>::into)
+                                .map(::prisma_client_rust::SerializedWhere::transform_equals)
                                 .collect(),
                         ),
                     )]),
                 ),
-                Self::DeviceActivitySome(where_params) => SerializedWhere::new(
-                    "DeviceActivity",
-                    SerializedWhereValue::Object(vec![(
-                        "some".to_string(),
-                        PrismaValue::Object(
-                            where_params
-                                .into_iter()
-                                .map(Into::<SerializedWhere>::into)
-                                .map(SerializedWhere::transform_equals)
-                                .collect(),
-                        ),
-                    )]),
-                ),
-                Self::DeviceActivityEvery(where_params) => SerializedWhere::new(
-                    "DeviceActivity",
-                    SerializedWhereValue::Object(vec![(
-                        "every".to_string(),
-                        PrismaValue::Object(
-                            where_params
-                                .into_iter()
-                                .map(Into::<SerializedWhere>::into)
-                                .map(SerializedWhere::transform_equals)
-                                .collect(),
-                        ),
-                    )]),
-                ),
-                Self::DeviceActivityNone(where_params) => SerializedWhere::new(
-                    "DeviceActivity",
-                    SerializedWhereValue::Object(vec![(
-                        "none".to_string(),
-                        PrismaValue::Object(
-                            where_params
-                                .into_iter()
-                                .map(Into::<SerializedWhere>::into)
-                                .map(SerializedWhere::transform_equals)
-                                .collect(),
-                        ),
-                    )]),
-                ),
+                Self::DeviceActivitySome(where_params) => {
+                    ::prisma_client_rust::SerializedWhere::new(
+                        "DeviceActivity",
+                        ::prisma_client_rust::SerializedWhereValue::Object(vec![(
+                            "some".to_string(),
+                            ::prisma_client_rust::PrismaValue::Object(
+                                where_params
+                                    .into_iter()
+                                    .map(Into::<::prisma_client_rust::SerializedWhere>::into)
+                                    .map(::prisma_client_rust::SerializedWhere::transform_equals)
+                                    .collect(),
+                            ),
+                        )]),
+                    )
+                }
+                Self::DeviceActivityEvery(where_params) => {
+                    ::prisma_client_rust::SerializedWhere::new(
+                        "DeviceActivity",
+                        ::prisma_client_rust::SerializedWhereValue::Object(vec![(
+                            "every".to_string(),
+                            ::prisma_client_rust::PrismaValue::Object(
+                                where_params
+                                    .into_iter()
+                                    .map(Into::<::prisma_client_rust::SerializedWhere>::into)
+                                    .map(::prisma_client_rust::SerializedWhere::transform_equals)
+                                    .collect(),
+                            ),
+                        )]),
+                    )
+                }
+                Self::DeviceActivityNone(where_params) => {
+                    ::prisma_client_rust::SerializedWhere::new(
+                        "DeviceActivity",
+                        ::prisma_client_rust::SerializedWhereValue::Object(vec![(
+                            "none".to_string(),
+                            ::prisma_client_rust::PrismaValue::Object(
+                                where_params
+                                    .into_iter()
+                                    .map(Into::<::prisma_client_rust::SerializedWhere>::into)
+                                    .map(::prisma_client_rust::SerializedWhere::transform_equals)
+                                    .collect(),
+                            ),
+                        )]),
+                    )
+                }
             }
         }
     }
@@ -1169,13 +1216,14 @@ pub mod activity {
             }
         }
     }
-    pub type UniqueArgs = prisma_client_rust::UniqueArgs<WithParam>;
-    pub type ManyArgs = prisma_client_rust::ManyArgs<WhereParam, WithParam, OrderByParam, Cursor>;
-    pub type Count<'a> = prisma_client_rust::Count<'a, WhereParam, OrderByParam, Cursor>;
-    pub type Create<'a> = prisma_client_rust::Create<'a, SetParam, WithParam, Data>;
+    pub type UniqueArgs = ::prisma_client_rust::UniqueArgs<WithParam>;
+    pub type ManyArgs = ::prisma_client_rust::ManyArgs<WhereParam, WithParam, OrderByParam, Cursor>;
+    pub type Count<'a> = ::prisma_client_rust::Count<'a, WhereParam, OrderByParam, Cursor>;
+    pub type Create<'a> = ::prisma_client_rust::Create<'a, SetParam, WithParam, Data>;
+    pub type CreateMany<'a> = ::prisma_client_rust::CreateMany<'a, SetParam>;
     pub type FindUnique<'a> =
-        prisma_client_rust::FindUnique<'a, WhereParam, WithParam, SetParam, Data>;
-    pub type FindMany<'a> = prisma_client_rust::FindMany<
+        ::prisma_client_rust::FindUnique<'a, WhereParam, WithParam, SetParam, Data>;
+    pub type FindMany<'a> = ::prisma_client_rust::FindMany<
         'a,
         WhereParam,
         WithParam,
@@ -1185,12 +1233,12 @@ pub mod activity {
         Data,
     >;
     pub type FindFirst<'a> =
-        prisma_client_rust::FindFirst<'a, WhereParam, WithParam, OrderByParam, Cursor, Data>;
-    pub type Update<'a> = prisma_client_rust::Update<'a, WhereParam, WithParam, SetParam, Data>;
-    pub type UpdateMany<'a> = prisma_client_rust::UpdateMany<'a, WhereParam, SetParam>;
-    pub type Upsert<'a> = prisma_client_rust::Upsert<'a, WhereParam, SetParam, WithParam, Data>;
-    pub type Delete<'a> = prisma_client_rust::Delete<'a, WhereParam, WithParam, Data>;
-    pub type DeleteMany<'a> = prisma_client_rust::DeleteMany<'a, WhereParam>;
+        ::prisma_client_rust::FindFirst<'a, WhereParam, WithParam, OrderByParam, Cursor, Data>;
+    pub type Update<'a> = ::prisma_client_rust::Update<'a, WhereParam, WithParam, SetParam, Data>;
+    pub type UpdateMany<'a> = ::prisma_client_rust::UpdateMany<'a, WhereParam, SetParam>;
+    pub type Upsert<'a> = ::prisma_client_rust::Upsert<'a, WhereParam, SetParam, WithParam, Data>;
+    pub type Delete<'a> = ::prisma_client_rust::Delete<'a, WhereParam, WithParam, Data>;
+    pub type DeleteMany<'a> = ::prisma_client_rust::DeleteMany<'a, WhereParam>;
     pub struct Actions<'a> {
         pub client: &'a PrismaClient,
     }
@@ -1198,21 +1246,21 @@ pub mod activity {
         pub fn find_unique(self, _where: UniqueWhereParam) -> FindUnique<'a> {
             FindUnique::new(
                 self.client._new_query_context(),
-                QueryInfo::new("Activity", _outputs()),
+                ::prisma_client_rust::QueryInfo::new("Activity", _outputs()),
                 _where.into(),
             )
         }
         pub fn find_first(self, _where: Vec<WhereParam>) -> FindFirst<'a> {
             FindFirst::new(
                 self.client._new_query_context(),
-                QueryInfo::new("Activity", _outputs()),
+                ::prisma_client_rust::QueryInfo::new("Activity", _outputs()),
                 _where,
             )
         }
         pub fn find_many(self, _where: Vec<WhereParam>) -> FindMany<'a> {
             FindMany::new(
                 self.client._new_query_context(),
-                QueryInfo::new("Activity", _outputs()),
+                ::prisma_client_rust::QueryInfo::new("Activity", _outputs()),
                 _where,
             )
         }
@@ -1228,14 +1276,33 @@ pub mod activity {
             _params.push(user::link(user));
             Create::new(
                 self.client._new_query_context(),
-                QueryInfo::new("Activity", _outputs()),
+                ::prisma_client_rust::QueryInfo::new("Activity", _outputs()),
                 _params,
+            )
+        }
+        pub fn create_many(
+            self,
+            data: Vec<(String, String, super::user::UniqueWhereParam, Vec<SetParam>)>,
+        ) -> CreateMany<'a> {
+            let data = data
+                .into_iter()
+                .map(|(id, name, user, mut _params)| {
+                    _params.push(id::set(id));
+                    _params.push(name::set(name));
+                    _params.push(user::link(user));
+                    _params
+                })
+                .collect();
+            CreateMany::new(
+                self.client._new_query_context(),
+                ::prisma_client_rust::QueryInfo::new("Activity", _outputs()),
+                data,
             )
         }
         pub fn update(self, _where: UniqueWhereParam, _params: Vec<SetParam>) -> Update<'a> {
             Update::new(
                 self.client._new_query_context(),
-                QueryInfo::new("Activity", _outputs()),
+                ::prisma_client_rust::QueryInfo::new("Activity", _outputs()),
                 _where.into(),
                 _params,
                 vec![],
@@ -1248,24 +1315,9 @@ pub mod activity {
         ) -> UpdateMany<'a> {
             UpdateMany::new(
                 self.client._new_query_context(),
-                QueryInfo::new("Activity", _outputs()),
+                ::prisma_client_rust::QueryInfo::new("Activity", _outputs()),
                 _where,
                 _params,
-            )
-        }
-        pub fn delete(self, _where: UniqueWhereParam) -> Delete<'a> {
-            Delete::new(
-                self.client._new_query_context(),
-                QueryInfo::new("Activity", _outputs()),
-                _where.into(),
-                vec![],
-            )
-        }
-        pub fn delete_many(self, _where: Vec<WhereParam>) -> DeleteMany<'a> {
-            DeleteMany::new(
-                self.client._new_query_context(),
-                QueryInfo::new("Activity", _outputs()),
-                _where.into(),
             )
         }
         pub fn upsert(
@@ -1284,16 +1336,31 @@ pub mod activity {
             _params.push(user::link(user));
             Upsert::new(
                 self.client._new_query_context(),
-                QueryInfo::new("Activity", _outputs()),
+                ::prisma_client_rust::QueryInfo::new("Activity", _outputs()),
                 _where.into(),
                 _params,
                 _update,
             )
         }
+        pub fn delete(self, _where: UniqueWhereParam) -> Delete<'a> {
+            Delete::new(
+                self.client._new_query_context(),
+                ::prisma_client_rust::QueryInfo::new("Activity", _outputs()),
+                _where.into(),
+                vec![],
+            )
+        }
+        pub fn delete_many(self, _where: Vec<WhereParam>) -> DeleteMany<'a> {
+            DeleteMany::new(
+                self.client._new_query_context(),
+                ::prisma_client_rust::QueryInfo::new("Activity", _outputs()),
+                _where.into(),
+            )
+        }
         pub fn count(self) -> Count<'a> {
             Count::new(
                 self.client._new_query_context(),
-                QueryInfo::new("Activity", _outputs()),
+                ::prisma_client_rust::QueryInfo::new("Activity", _outputs()),
                 vec![],
             )
         }
@@ -1433,7 +1500,7 @@ pub mod device {
                 self.0 = self.0.with(params.into());
                 self
             }
-            pub fn order_by(mut self, param: device_activity::OrderByParam) -> Self {
+            pub fn order_by(mut self, param: impl Into<device_activity::OrderByParam>) -> Self {
                 self.0 = self.0.order_by(param);
                 self
             }
@@ -1462,25 +1529,38 @@ pub mod device {
             Link(params).into()
         }
         pub fn unlink(params: Vec<device_activity::UniqueWhereParam>) -> SetParam {
-            SetParam::UnlinkDeviceActivity(params)
+            SetParam::DisconnectDeviceActivity(params)
+        }
+        pub fn set(params: Vec<device_activity::UniqueWhereParam>) -> SetParam {
+            SetParam::SetDeviceActivity(params)
         }
         pub struct Link(pub Vec<device_activity::UniqueWhereParam>);
         impl From<Link> for SetParam {
             fn from(value: Link) -> Self {
-                Self::LinkDeviceActivity(value.0)
+                Self::ConnectDeviceActivity(value.0)
             }
         }
     }
-    pub fn _outputs() -> Vec<Selection> {
+    pub fn _outputs() -> Vec<::prisma_client_rust::Selection> {
         ["ID", "Name"]
             .into_iter()
             .map(|o| {
-                let builder = Selection::builder(o);
+                let builder = ::prisma_client_rust::Selection::builder(o);
                 builder.build()
             })
             .collect()
     }
-    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub fn create(
+        id: String,
+        name: String,
+        _params: Vec<SetParam>,
+    ) -> (String, String, Vec<SetParam>) {
+        (id, name, _params)
+    }
+    #[macro_export]
+    macro_rules ! _select_device { ($ ($ field : ident $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? $ ({ $ ($ selections : tt) + }) ?) +) => { { $ crate :: prisma :: device :: select ! (@ definitions ; $ ($ field $ (($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) *) ? $ ({ $ ($ selections) + }) ?) +) ; Select ($ crate :: prisma :: device :: select ! (@ select_fields_to_selections ; $ ($ field $ (($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) *) ? $ ({ $ ($ selections) + }) ?) +)) } } ; (@ definitions ; $ ($ field : ident $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? $ ({ $ ($ selections : tt) + }) ?) +) => { # [allow (warnings)] enum Fields { id , name , device_activity } # [allow (warnings)] impl Fields { fn selections () { $ (let _ = Fields :: $ field ;) + } } # [derive (:: serde :: Deserialize , :: serde :: Serialize)] # [allow (warnings)] pub struct Data { $ ($ field : $ crate :: prisma :: device :: select ! (@ field_type ; $ field $ ({ $ ($ selections) + }) ?) ,) + } $ ($ (pub mod $ field { $ crate :: prisma :: device :: select ! (@ field_module ; $ field { $ ($ selections) + }) ; }) ?) + pub struct Select (pub Vec < :: prisma_client_rust :: Selection >) ; impl :: prisma_client_rust :: select :: SelectType < $ crate :: prisma :: device :: Data > for Select { type Data = Data ; fn to_selections (self) -> Vec < :: prisma_client_rust :: Selection > { self . 0 } } } ; (@ field_type ; id) => { String } ; (@ field_type ; name) => { String } ; (@ field_type ; device_activity { $ ($ selections : tt) + }) => { Vec < device_activity :: Data > } ; (@ field_type ; device_activity) => { Vec < crate :: prisma :: device_activity :: Data > } ; (@ field_type ; $ field : ident $ ($ tokens : tt) *) => { compile_error ! (stringify ! (Cannot select field nonexistent field $ field on model device)) } ; (@ field_module ; device_activity { $ ($ selections : tt) + }) => { $ crate :: prisma :: device_activity :: select ! (@ definitions ; $ ($ selections) +) ; } ; (@ field_module ; $ ($ tokens : tt) *) => { } ; (@ select_fields_to_selections ; $ ($ field : ident $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? $ ({ $ ($ selections : tt) + }) ?) +) => { vec ! [$ ($ crate :: prisma :: device :: select ! (@ select_field_to_selection ; $ field $ (($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) *) ? $ ({ $ ($ selections) + }) ?)) , +] } ; (@ select_field_to_selection ; id) => { :: prisma_client_rust :: Selection :: builder ("ID") . build () } ; (@ select_field_to_selection ; name) => { :: prisma_client_rust :: Selection :: builder ("Name") . build () } ; (@ select_field_to_selection ; device_activity $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? { $ ($ selections : tt) + }) => { { # [allow (warnings)] let mut selection = :: prisma_client_rust :: Selection :: builder ("DeviceActivity") ; $ (let args = $ crate :: prisma :: device_activity :: ManyArgs :: new ($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) * ; selection . set_arguments (args . to_graphql () . 0) ;) ? selection . nested_selections ($ crate :: prisma :: device_activity :: select ! (@ select_fields_to_selections ; $ ($ selections) +)) ; selection . build () } } ; (@ select_field_to_selection ; device_activity $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ?) => { { # [allow (warnings)] let mut selection = :: prisma_client_rust :: Selection :: builder ("DeviceActivity") ; $ (let args = $ crate :: prisma :: device_activity :: ManyArgs :: new ($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) * ; selection . set_arguments (args . to_graphql () . 0) ;) ? selection . nested_selections ($ crate :: prisma :: device_activity :: _outputs ()) ; selection . build () } } ; (@ select_field_to_selection ; $ ($ tokens : tt) *) => { :: prisma_client_rust :: Selection :: builder ("") . build () } ; }
+    pub use _select_device as select;
+    #[derive(Debug, Clone, :: serde :: Serialize, :: serde :: Deserialize)]
     pub struct Data {
         #[serde(rename = "ID")]
         pub id: String,
@@ -1491,20 +1571,20 @@ pub mod device {
     }
     impl Data {
         pub fn device_activity(&self) -> Result<&Vec<super::device_activity::Data>, &'static str> {
-            self . device_activity . as_ref () . ok_or ("Attempted to access 'device_activity' but did not fetch it using the .with() syntax")
+            self . device_activity . as_ref () . ok_or ("Attempted to acccess 'device_activity' but did not fetch it using the .with() syntax")
         }
     }
     #[derive(Clone)]
     pub enum WithParam {
         DeviceActivity(super::device_activity::ManyArgs),
     }
-    impl Into<Selection> for WithParam {
-        fn into(self) -> Selection {
+    impl Into<::prisma_client_rust::Selection> for WithParam {
+        fn into(self) -> ::prisma_client_rust::Selection {
             match self {
                 Self::DeviceActivity(args) => {
                     let (arguments, mut nested_selections) = args.to_graphql();
                     nested_selections.extend(super::device_activity::_outputs());
-                    let mut builder = Selection::builder("DeviceActivity");
+                    let mut builder = ::prisma_client_rust::Selection::builder("DeviceActivity");
                     builder
                         .nested_selections(nested_selections)
                         .set_arguments(arguments);
@@ -1517,38 +1597,56 @@ pub mod device {
     pub enum SetParam {
         SetId(String),
         SetName(String),
-        LinkDeviceActivity(Vec<super::device_activity::UniqueWhereParam>),
-        UnlinkDeviceActivity(Vec<super::device_activity::UniqueWhereParam>),
+        ConnectDeviceActivity(Vec<super::device_activity::UniqueWhereParam>),
+        DisconnectDeviceActivity(Vec<super::device_activity::UniqueWhereParam>),
+        SetDeviceActivity(Vec<super::device_activity::UniqueWhereParam>),
     }
-    impl Into<(String, PrismaValue)> for SetParam {
-        fn into(self) -> (String, PrismaValue) {
+    impl Into<(String, ::prisma_client_rust::PrismaValue)> for SetParam {
+        fn into(self) -> (String, ::prisma_client_rust::PrismaValue) {
             match self {
                 SetParam::SetId(value) => ("ID".to_string(), PrismaValue::String(value)),
                 SetParam::SetName(value) => ("Name".to_string(), PrismaValue::String(value)),
-                SetParam::LinkDeviceActivity(where_params) => (
+                SetParam::ConnectDeviceActivity(where_params) => (
                     "DeviceActivity".to_string(),
-                    PrismaValue::Object(vec![(
+                    ::prisma_client_rust::PrismaValue::Object(vec![(
                         "connect".to_string(),
-                        PrismaValue::Object(
+                        ::prisma_client_rust::PrismaValue::List(
                             where_params
                                 .into_iter()
                                 .map(Into::<super::device_activity::WhereParam>::into)
-                                .map(Into::<SerializedWhere>::into)
-                                .map(SerializedWhere::transform_equals)
+                                .map(Into::<::prisma_client_rust::SerializedWhere>::into)
+                                .map(::prisma_client_rust::SerializedWhere::transform_equals)
+                                .map(|v| ::prisma_client_rust::PrismaValue::Object(vec![v]))
                                 .collect(),
                         ),
                     )]),
                 ),
-                SetParam::UnlinkDeviceActivity(where_params) => (
+                SetParam::DisconnectDeviceActivity(where_params) => (
                     "DeviceActivity".to_string(),
-                    PrismaValue::Object(vec![(
+                    ::prisma_client_rust::PrismaValue::Object(vec![(
                         "disconnect".to_string(),
-                        PrismaValue::Object(
+                        ::prisma_client_rust::PrismaValue::List(
                             where_params
                                 .into_iter()
                                 .map(Into::<super::device_activity::WhereParam>::into)
-                                .map(Into::<SerializedWhere>::into)
-                                .map(SerializedWhere::transform_equals)
+                                .map(Into::<::prisma_client_rust::SerializedWhere>::into)
+                                .map(::prisma_client_rust::SerializedWhere::transform_equals)
+                                .map(|v| ::prisma_client_rust::PrismaValue::Object(vec![v]))
+                                .collect(),
+                        ),
+                    )]),
+                ),
+                SetParam::SetDeviceActivity(where_params) => (
+                    "DeviceActivity".to_string(),
+                    ::prisma_client_rust::PrismaValue::Object(vec![(
+                        "set".to_string(),
+                        ::prisma_client_rust::PrismaValue::List(
+                            where_params
+                                .into_iter()
+                                .map(Into::<super::device_activity::WhereParam>::into)
+                                .map(Into::<::prisma_client_rust::SerializedWhere>::into)
+                                .map(::prisma_client_rust::SerializedWhere::transform_equals)
+                                .map(|v| ::prisma_client_rust::PrismaValue::Object(vec![v]))
                                 .collect(),
                         ),
                     )]),
@@ -1561,15 +1659,16 @@ pub mod device {
         Id(Direction),
         Name(Direction),
     }
-    impl Into<(String, PrismaValue)> for OrderByParam {
-        fn into(self) -> (String, PrismaValue) {
+    impl Into<(String, ::prisma_client_rust::PrismaValue)> for OrderByParam {
+        fn into(self) -> (String, ::prisma_client_rust::PrismaValue) {
             match self {
-                Self::Id(direction) => {
-                    ("ID".to_string(), PrismaValue::String(direction.to_string()))
-                }
+                Self::Id(direction) => (
+                    "ID".to_string(),
+                    ::prisma_client_rust::PrismaValue::String(direction.to_string()),
+                ),
                 Self::Name(direction) => (
                     "Name".to_string(),
-                    PrismaValue::String(direction.to_string()),
+                    ::prisma_client_rust::PrismaValue::String(direction.to_string()),
                 ),
             }
         }
@@ -1579,8 +1678,8 @@ pub mod device {
         Id(String),
         Name(String),
     }
-    impl Into<(String, PrismaValue)> for Cursor {
-        fn into(self) -> (String, PrismaValue) {
+    impl Into<(String, ::prisma_client_rust::PrismaValue)> for Cursor {
+        fn into(self) -> (String, ::prisma_client_rust::PrismaValue) {
             match self {
                 Self::Id(cursor) => ("ID".to_string(), PrismaValue::String(cursor)),
                 Self::Name(cursor) => ("Name".to_string(), PrismaValue::String(cursor)),
@@ -1620,256 +1719,262 @@ pub mod device {
         DeviceActivityEvery(Vec<super::device_activity::WhereParam>),
         DeviceActivityNone(Vec<super::device_activity::WhereParam>),
     }
-    impl Into<SerializedWhere> for WhereParam {
-        fn into(self) -> SerializedWhere {
+    impl Into<::prisma_client_rust::SerializedWhere> for WhereParam {
+        fn into(self) -> ::prisma_client_rust::SerializedWhere {
             match self {
-                Self::Not(value) => SerializedWhere::new(
+                Self::Not(value) => ::prisma_client_rust::SerializedWhere::new(
                     "NOT",
-                    SerializedWhereValue::Object(
+                    ::prisma_client_rust::SerializedWhereValue::Object(
                         value
                             .into_iter()
-                            .map(Into::<SerializedWhere>::into)
+                            .map(Into::<::prisma_client_rust::SerializedWhere>::into)
                             .map(Into::into)
                             .collect(),
                     ),
                 ),
-                Self::Or(value) => SerializedWhere::new(
+                Self::Or(value) => ::prisma_client_rust::SerializedWhere::new(
                     "OR",
-                    SerializedWhereValue::List(
+                    ::prisma_client_rust::SerializedWhereValue::List(
                         value
                             .into_iter()
-                            .map(Into::<SerializedWhere>::into)
+                            .map(Into::<::prisma_client_rust::SerializedWhere>::into)
                             .map(Into::into)
                             .map(|v| vec![v])
-                            .map(PrismaValue::Object)
+                            .map(::prisma_client_rust::PrismaValue::Object)
                             .collect(),
                     ),
                 ),
-                Self::And(value) => SerializedWhere::new(
+                Self::And(value) => ::prisma_client_rust::SerializedWhere::new(
                     "AND",
-                    SerializedWhereValue::Object(
+                    ::prisma_client_rust::SerializedWhereValue::Object(
                         value
                             .into_iter()
-                            .map(Into::<SerializedWhere>::into)
+                            .map(Into::<::prisma_client_rust::SerializedWhere>::into)
                             .map(Into::into)
                             .collect(),
                     ),
                 ),
-                Self::IdEquals(value) => SerializedWhere::new(
+                Self::IdEquals(value) => ::prisma_client_rust::SerializedWhere::new(
                     "ID",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "equals".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::IdInVec(value) => SerializedWhere::new(
+                Self::IdInVec(value) => ::prisma_client_rust::SerializedWhere::new(
                     "ID",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "in".to_string(),
                         PrismaValue::List(
                             value.into_iter().map(|v| PrismaValue::String(v)).collect(),
                         ),
                     )]),
                 ),
-                Self::IdNotInVec(value) => SerializedWhere::new(
+                Self::IdNotInVec(value) => ::prisma_client_rust::SerializedWhere::new(
                     "ID",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "notIn".to_string(),
                         PrismaValue::List(
                             value.into_iter().map(|v| PrismaValue::String(v)).collect(),
                         ),
                     )]),
                 ),
-                Self::IdLt(value) => SerializedWhere::new(
+                Self::IdLt(value) => ::prisma_client_rust::SerializedWhere::new(
                     "ID",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "lt".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::IdLte(value) => SerializedWhere::new(
+                Self::IdLte(value) => ::prisma_client_rust::SerializedWhere::new(
                     "ID",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "lte".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::IdGt(value) => SerializedWhere::new(
+                Self::IdGt(value) => ::prisma_client_rust::SerializedWhere::new(
                     "ID",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "gt".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::IdGte(value) => SerializedWhere::new(
+                Self::IdGte(value) => ::prisma_client_rust::SerializedWhere::new(
                     "ID",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "gte".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::IdContains(value) => SerializedWhere::new(
+                Self::IdContains(value) => ::prisma_client_rust::SerializedWhere::new(
                     "ID",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "contains".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::IdStartsWith(value) => SerializedWhere::new(
+                Self::IdStartsWith(value) => ::prisma_client_rust::SerializedWhere::new(
                     "ID",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "startsWith".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::IdEndsWith(value) => SerializedWhere::new(
+                Self::IdEndsWith(value) => ::prisma_client_rust::SerializedWhere::new(
                     "ID",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "endsWith".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::IdMode(value) => SerializedWhere::new(
+                Self::IdMode(value) => ::prisma_client_rust::SerializedWhere::new(
                     "ID",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "mode".to_string(),
                         PrismaValue::Enum(value.to_string()),
                     )]),
                 ),
-                Self::IdNot(value) => SerializedWhere::new(
+                Self::IdNot(value) => ::prisma_client_rust::SerializedWhere::new(
                     "ID",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "not".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::NameEquals(value) => SerializedWhere::new(
+                Self::NameEquals(value) => ::prisma_client_rust::SerializedWhere::new(
                     "Name",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "equals".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::NameInVec(value) => SerializedWhere::new(
+                Self::NameInVec(value) => ::prisma_client_rust::SerializedWhere::new(
                     "Name",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "in".to_string(),
                         PrismaValue::List(
                             value.into_iter().map(|v| PrismaValue::String(v)).collect(),
                         ),
                     )]),
                 ),
-                Self::NameNotInVec(value) => SerializedWhere::new(
+                Self::NameNotInVec(value) => ::prisma_client_rust::SerializedWhere::new(
                     "Name",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "notIn".to_string(),
                         PrismaValue::List(
                             value.into_iter().map(|v| PrismaValue::String(v)).collect(),
                         ),
                     )]),
                 ),
-                Self::NameLt(value) => SerializedWhere::new(
+                Self::NameLt(value) => ::prisma_client_rust::SerializedWhere::new(
                     "Name",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "lt".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::NameLte(value) => SerializedWhere::new(
+                Self::NameLte(value) => ::prisma_client_rust::SerializedWhere::new(
                     "Name",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "lte".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::NameGt(value) => SerializedWhere::new(
+                Self::NameGt(value) => ::prisma_client_rust::SerializedWhere::new(
                     "Name",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "gt".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::NameGte(value) => SerializedWhere::new(
+                Self::NameGte(value) => ::prisma_client_rust::SerializedWhere::new(
                     "Name",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "gte".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::NameContains(value) => SerializedWhere::new(
+                Self::NameContains(value) => ::prisma_client_rust::SerializedWhere::new(
                     "Name",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "contains".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::NameStartsWith(value) => SerializedWhere::new(
+                Self::NameStartsWith(value) => ::prisma_client_rust::SerializedWhere::new(
                     "Name",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "startsWith".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::NameEndsWith(value) => SerializedWhere::new(
+                Self::NameEndsWith(value) => ::prisma_client_rust::SerializedWhere::new(
                     "Name",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "endsWith".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::NameMode(value) => SerializedWhere::new(
+                Self::NameMode(value) => ::prisma_client_rust::SerializedWhere::new(
                     "Name",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "mode".to_string(),
                         PrismaValue::Enum(value.to_string()),
                     )]),
                 ),
-                Self::NameNot(value) => SerializedWhere::new(
+                Self::NameNot(value) => ::prisma_client_rust::SerializedWhere::new(
                     "Name",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "not".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::DeviceActivitySome(where_params) => SerializedWhere::new(
-                    "DeviceActivity",
-                    SerializedWhereValue::Object(vec![(
-                        "some".to_string(),
-                        PrismaValue::Object(
-                            where_params
-                                .into_iter()
-                                .map(Into::<SerializedWhere>::into)
-                                .map(SerializedWhere::transform_equals)
-                                .collect(),
-                        ),
-                    )]),
-                ),
-                Self::DeviceActivityEvery(where_params) => SerializedWhere::new(
-                    "DeviceActivity",
-                    SerializedWhereValue::Object(vec![(
-                        "every".to_string(),
-                        PrismaValue::Object(
-                            where_params
-                                .into_iter()
-                                .map(Into::<SerializedWhere>::into)
-                                .map(SerializedWhere::transform_equals)
-                                .collect(),
-                        ),
-                    )]),
-                ),
-                Self::DeviceActivityNone(where_params) => SerializedWhere::new(
-                    "DeviceActivity",
-                    SerializedWhereValue::Object(vec![(
-                        "none".to_string(),
-                        PrismaValue::Object(
-                            where_params
-                                .into_iter()
-                                .map(Into::<SerializedWhere>::into)
-                                .map(SerializedWhere::transform_equals)
-                                .collect(),
-                        ),
-                    )]),
-                ),
+                Self::DeviceActivitySome(where_params) => {
+                    ::prisma_client_rust::SerializedWhere::new(
+                        "DeviceActivity",
+                        ::prisma_client_rust::SerializedWhereValue::Object(vec![(
+                            "some".to_string(),
+                            ::prisma_client_rust::PrismaValue::Object(
+                                where_params
+                                    .into_iter()
+                                    .map(Into::<::prisma_client_rust::SerializedWhere>::into)
+                                    .map(::prisma_client_rust::SerializedWhere::transform_equals)
+                                    .collect(),
+                            ),
+                        )]),
+                    )
+                }
+                Self::DeviceActivityEvery(where_params) => {
+                    ::prisma_client_rust::SerializedWhere::new(
+                        "DeviceActivity",
+                        ::prisma_client_rust::SerializedWhereValue::Object(vec![(
+                            "every".to_string(),
+                            ::prisma_client_rust::PrismaValue::Object(
+                                where_params
+                                    .into_iter()
+                                    .map(Into::<::prisma_client_rust::SerializedWhere>::into)
+                                    .map(::prisma_client_rust::SerializedWhere::transform_equals)
+                                    .collect(),
+                            ),
+                        )]),
+                    )
+                }
+                Self::DeviceActivityNone(where_params) => {
+                    ::prisma_client_rust::SerializedWhere::new(
+                        "DeviceActivity",
+                        ::prisma_client_rust::SerializedWhereValue::Object(vec![(
+                            "none".to_string(),
+                            ::prisma_client_rust::PrismaValue::Object(
+                                where_params
+                                    .into_iter()
+                                    .map(Into::<::prisma_client_rust::SerializedWhere>::into)
+                                    .map(::prisma_client_rust::SerializedWhere::transform_equals)
+                                    .collect(),
+                            ),
+                        )]),
+                    )
+                }
             }
         }
     }
@@ -1895,13 +2000,14 @@ pub mod device {
             }
         }
     }
-    pub type UniqueArgs = prisma_client_rust::UniqueArgs<WithParam>;
-    pub type ManyArgs = prisma_client_rust::ManyArgs<WhereParam, WithParam, OrderByParam, Cursor>;
-    pub type Count<'a> = prisma_client_rust::Count<'a, WhereParam, OrderByParam, Cursor>;
-    pub type Create<'a> = prisma_client_rust::Create<'a, SetParam, WithParam, Data>;
+    pub type UniqueArgs = ::prisma_client_rust::UniqueArgs<WithParam>;
+    pub type ManyArgs = ::prisma_client_rust::ManyArgs<WhereParam, WithParam, OrderByParam, Cursor>;
+    pub type Count<'a> = ::prisma_client_rust::Count<'a, WhereParam, OrderByParam, Cursor>;
+    pub type Create<'a> = ::prisma_client_rust::Create<'a, SetParam, WithParam, Data>;
+    pub type CreateMany<'a> = ::prisma_client_rust::CreateMany<'a, SetParam>;
     pub type FindUnique<'a> =
-        prisma_client_rust::FindUnique<'a, WhereParam, WithParam, SetParam, Data>;
-    pub type FindMany<'a> = prisma_client_rust::FindMany<
+        ::prisma_client_rust::FindUnique<'a, WhereParam, WithParam, SetParam, Data>;
+    pub type FindMany<'a> = ::prisma_client_rust::FindMany<
         'a,
         WhereParam,
         WithParam,
@@ -1911,12 +2017,12 @@ pub mod device {
         Data,
     >;
     pub type FindFirst<'a> =
-        prisma_client_rust::FindFirst<'a, WhereParam, WithParam, OrderByParam, Cursor, Data>;
-    pub type Update<'a> = prisma_client_rust::Update<'a, WhereParam, WithParam, SetParam, Data>;
-    pub type UpdateMany<'a> = prisma_client_rust::UpdateMany<'a, WhereParam, SetParam>;
-    pub type Upsert<'a> = prisma_client_rust::Upsert<'a, WhereParam, SetParam, WithParam, Data>;
-    pub type Delete<'a> = prisma_client_rust::Delete<'a, WhereParam, WithParam, Data>;
-    pub type DeleteMany<'a> = prisma_client_rust::DeleteMany<'a, WhereParam>;
+        ::prisma_client_rust::FindFirst<'a, WhereParam, WithParam, OrderByParam, Cursor, Data>;
+    pub type Update<'a> = ::prisma_client_rust::Update<'a, WhereParam, WithParam, SetParam, Data>;
+    pub type UpdateMany<'a> = ::prisma_client_rust::UpdateMany<'a, WhereParam, SetParam>;
+    pub type Upsert<'a> = ::prisma_client_rust::Upsert<'a, WhereParam, SetParam, WithParam, Data>;
+    pub type Delete<'a> = ::prisma_client_rust::Delete<'a, WhereParam, WithParam, Data>;
+    pub type DeleteMany<'a> = ::prisma_client_rust::DeleteMany<'a, WhereParam>;
     pub struct Actions<'a> {
         pub client: &'a PrismaClient,
     }
@@ -1924,21 +2030,21 @@ pub mod device {
         pub fn find_unique(self, _where: UniqueWhereParam) -> FindUnique<'a> {
             FindUnique::new(
                 self.client._new_query_context(),
-                QueryInfo::new("Device", _outputs()),
+                ::prisma_client_rust::QueryInfo::new("Device", _outputs()),
                 _where.into(),
             )
         }
         pub fn find_first(self, _where: Vec<WhereParam>) -> FindFirst<'a> {
             FindFirst::new(
                 self.client._new_query_context(),
-                QueryInfo::new("Device", _outputs()),
+                ::prisma_client_rust::QueryInfo::new("Device", _outputs()),
                 _where,
             )
         }
         pub fn find_many(self, _where: Vec<WhereParam>) -> FindMany<'a> {
             FindMany::new(
                 self.client._new_query_context(),
-                QueryInfo::new("Device", _outputs()),
+                ::prisma_client_rust::QueryInfo::new("Device", _outputs()),
                 _where,
             )
         }
@@ -1947,14 +2053,29 @@ pub mod device {
             _params.push(name::set(name));
             Create::new(
                 self.client._new_query_context(),
-                QueryInfo::new("Device", _outputs()),
+                ::prisma_client_rust::QueryInfo::new("Device", _outputs()),
                 _params,
+            )
+        }
+        pub fn create_many(self, data: Vec<(String, String, Vec<SetParam>)>) -> CreateMany<'a> {
+            let data = data
+                .into_iter()
+                .map(|(id, name, mut _params)| {
+                    _params.push(id::set(id));
+                    _params.push(name::set(name));
+                    _params
+                })
+                .collect();
+            CreateMany::new(
+                self.client._new_query_context(),
+                ::prisma_client_rust::QueryInfo::new("Device", _outputs()),
+                data,
             )
         }
         pub fn update(self, _where: UniqueWhereParam, _params: Vec<SetParam>) -> Update<'a> {
             Update::new(
                 self.client._new_query_context(),
-                QueryInfo::new("Device", _outputs()),
+                ::prisma_client_rust::QueryInfo::new("Device", _outputs()),
                 _where.into(),
                 _params,
                 vec![],
@@ -1967,24 +2088,9 @@ pub mod device {
         ) -> UpdateMany<'a> {
             UpdateMany::new(
                 self.client._new_query_context(),
-                QueryInfo::new("Device", _outputs()),
+                ::prisma_client_rust::QueryInfo::new("Device", _outputs()),
                 _where,
                 _params,
-            )
-        }
-        pub fn delete(self, _where: UniqueWhereParam) -> Delete<'a> {
-            Delete::new(
-                self.client._new_query_context(),
-                QueryInfo::new("Device", _outputs()),
-                _where.into(),
-                vec![],
-            )
-        }
-        pub fn delete_many(self, _where: Vec<WhereParam>) -> DeleteMany<'a> {
-            DeleteMany::new(
-                self.client._new_query_context(),
-                QueryInfo::new("Device", _outputs()),
-                _where.into(),
             )
         }
         pub fn upsert(
@@ -1997,16 +2103,31 @@ pub mod device {
             _params.push(name::set(name));
             Upsert::new(
                 self.client._new_query_context(),
-                QueryInfo::new("Device", _outputs()),
+                ::prisma_client_rust::QueryInfo::new("Device", _outputs()),
                 _where.into(),
                 _params,
                 _update,
             )
         }
+        pub fn delete(self, _where: UniqueWhereParam) -> Delete<'a> {
+            Delete::new(
+                self.client._new_query_context(),
+                ::prisma_client_rust::QueryInfo::new("Device", _outputs()),
+                _where.into(),
+                vec![],
+            )
+        }
+        pub fn delete_many(self, _where: Vec<WhereParam>) -> DeleteMany<'a> {
+            DeleteMany::new(
+                self.client._new_query_context(),
+                ::prisma_client_rust::QueryInfo::new("Device", _outputs()),
+                _where.into(),
+            )
+        }
         pub fn count(self) -> Count<'a> {
             Count::new(
                 self.client._new_query_context(),
-                QueryInfo::new("Device", _outputs()),
+                ::prisma_client_rust::QueryInfo::new("Device", _outputs()),
                 vec![],
             )
         }
@@ -2288,12 +2409,12 @@ pub mod device_activity {
             Link(value).into()
         }
         pub fn unlink() -> SetParam {
-            SetParam::UnlinkActivity
+            SetParam::DisconnectActivity
         }
         pub struct Link(activity::UniqueWhereParam);
         impl From<Link> for SetParam {
             fn from(value: Link) -> Self {
-                Self::LinkActivity(value.0)
+                Self::ConnectActivity(value.0)
             }
         }
     }
@@ -2328,20 +2449,30 @@ pub mod device_activity {
         pub struct Link(device::UniqueWhereParam);
         impl From<Link> for SetParam {
             fn from(value: Link) -> Self {
-                Self::LinkDevice(value.0)
+                Self::ConnectDevice(value.0)
             }
         }
     }
-    pub fn _outputs() -> Vec<Selection> {
+    pub fn _outputs() -> Vec<::prisma_client_rust::Selection> {
         ["ID", "UpdatedAt", "CreatedAt", "ActivityId", "DeviceId"]
             .into_iter()
             .map(|o| {
-                let builder = Selection::builder(o);
+                let builder = ::prisma_client_rust::Selection::builder(o);
                 builder.build()
             })
             .collect()
     }
-    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub fn create(
+        id: String,
+        device: super::device::UniqueWhereParam,
+        _params: Vec<SetParam>,
+    ) -> (String, super::device::UniqueWhereParam, Vec<SetParam>) {
+        (id, device, _params)
+    }
+    #[macro_export]
+    macro_rules ! _select_device_activity { ($ ($ field : ident $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? $ ({ $ ($ selections : tt) + }) ?) +) => { { $ crate :: prisma :: device_activity :: select ! (@ definitions ; $ ($ field $ (($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) *) ? $ ({ $ ($ selections) + }) ?) +) ; Select ($ crate :: prisma :: device_activity :: select ! (@ select_fields_to_selections ; $ ($ field $ (($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) *) ? $ ({ $ ($ selections) + }) ?) +)) } } ; (@ definitions ; $ ($ field : ident $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? $ ({ $ ($ selections : tt) + }) ?) +) => { # [allow (warnings)] enum Fields { id , updated_at , created_at , activity_id , device_id , activity , device } # [allow (warnings)] impl Fields { fn selections () { $ (let _ = Fields :: $ field ;) + } } # [derive (:: serde :: Deserialize , :: serde :: Serialize)] # [allow (warnings)] pub struct Data { $ ($ field : $ crate :: prisma :: device_activity :: select ! (@ field_type ; $ field $ ({ $ ($ selections) + }) ?) ,) + } $ ($ (pub mod $ field { $ crate :: prisma :: device_activity :: select ! (@ field_module ; $ field { $ ($ selections) + }) ; }) ?) + pub struct Select (pub Vec < :: prisma_client_rust :: Selection >) ; impl :: prisma_client_rust :: select :: SelectType < $ crate :: prisma :: device_activity :: Data > for Select { type Data = Data ; fn to_selections (self) -> Vec < :: prisma_client_rust :: Selection > { self . 0 } } } ; (@ field_type ; id) => { String } ; (@ field_type ; updated_at) => { chrono :: DateTime < chrono :: FixedOffset > } ; (@ field_type ; created_at) => { chrono :: DateTime < chrono :: FixedOffset > } ; (@ field_type ; activity_id) => { Option < String > } ; (@ field_type ; device_id) => { String } ; (@ field_type ; activity { $ ($ selections : tt) + }) => { Option < activity :: Data > } ; (@ field_type ; activity) => { Option < crate :: prisma :: activity :: Data > } ; (@ field_type ; device { $ ($ selections : tt) + }) => { device :: Data } ; (@ field_type ; device) => { crate :: prisma :: device :: Data } ; (@ field_type ; $ field : ident $ ($ tokens : tt) *) => { compile_error ! (stringify ! (Cannot select field nonexistent field $ field on model device_activity)) } ; (@ field_module ; activity { $ ($ selections : tt) + }) => { $ crate :: prisma :: activity :: select ! (@ definitions ; $ ($ selections) +) ; } ; (@ field_module ; device { $ ($ selections : tt) + }) => { $ crate :: prisma :: device :: select ! (@ definitions ; $ ($ selections) +) ; } ; (@ field_module ; $ ($ tokens : tt) *) => { } ; (@ select_fields_to_selections ; $ ($ field : ident $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? $ ({ $ ($ selections : tt) + }) ?) +) => { vec ! [$ ($ crate :: prisma :: device_activity :: select ! (@ select_field_to_selection ; $ field $ (($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) *) ? $ ({ $ ($ selections) + }) ?)) , +] } ; (@ select_field_to_selection ; id) => { :: prisma_client_rust :: Selection :: builder ("ID") . build () } ; (@ select_field_to_selection ; updated_at) => { :: prisma_client_rust :: Selection :: builder ("UpdatedAt") . build () } ; (@ select_field_to_selection ; created_at) => { :: prisma_client_rust :: Selection :: builder ("CreatedAt") . build () } ; (@ select_field_to_selection ; activity_id) => { :: prisma_client_rust :: Selection :: builder ("ActivityId") . build () } ; (@ select_field_to_selection ; device_id) => { :: prisma_client_rust :: Selection :: builder ("DeviceId") . build () } ; (@ select_field_to_selection ; activity $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? { $ ($ selections : tt) + }) => { { # [allow (warnings)] let mut selection = :: prisma_client_rust :: Selection :: builder ("Activity") ; $ (let args = $ crate :: prisma :: activity :: ManyArgs :: new ($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) * ; selection . set_arguments (args . to_graphql () . 0) ;) ? selection . nested_selections ($ crate :: prisma :: activity :: select ! (@ select_fields_to_selections ; $ ($ selections) +)) ; selection . build () } } ; (@ select_field_to_selection ; activity $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ?) => { { # [allow (warnings)] let mut selection = :: prisma_client_rust :: Selection :: builder ("Activity") ; $ (let args = $ crate :: prisma :: activity :: ManyArgs :: new ($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) * ; selection . set_arguments (args . to_graphql () . 0) ;) ? selection . nested_selections ($ crate :: prisma :: activity :: _outputs ()) ; selection . build () } } ; (@ select_field_to_selection ; device $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? { $ ($ selections : tt) + }) => { { # [allow (warnings)] let mut selection = :: prisma_client_rust :: Selection :: builder ("Device") ; $ (let args = $ crate :: prisma :: device :: ManyArgs :: new ($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) * ; selection . set_arguments (args . to_graphql () . 0) ;) ? selection . nested_selections ($ crate :: prisma :: device :: select ! (@ select_fields_to_selections ; $ ($ selections) +)) ; selection . build () } } ; (@ select_field_to_selection ; device $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ?) => { { # [allow (warnings)] let mut selection = :: prisma_client_rust :: Selection :: builder ("Device") ; $ (let args = $ crate :: prisma :: device :: ManyArgs :: new ($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) * ; selection . set_arguments (args . to_graphql () . 0) ;) ? selection . nested_selections ($ crate :: prisma :: device :: _outputs ()) ; selection . build () } } ; (@ select_field_to_selection ; $ ($ tokens : tt) *) => { :: prisma_client_rust :: Selection :: builder ("") . build () } ; }
+    pub use _select_device_activity as select;
+    #[derive(Debug, Clone, :: serde :: Serialize, :: serde :: Deserialize)]
     pub struct Data {
         #[serde(rename = "ID")]
         pub id: String,
@@ -2368,14 +2499,16 @@ pub mod device_activity {
             self.activity
                 .as_ref()
                 .ok_or(
-                    "Attempted to access 'activity' but did not fetch it using the .with() syntax",
+                    "Attempted to acccess 'activity' but did not fetch it using the .with() syntax",
                 )
                 .map(|v| v.as_ref().map(|v| v.as_ref()))
         }
         pub fn device(&self) -> Result<&super::device::Data, &'static str> {
             self.device
                 .as_ref()
-                .ok_or("Attempted to access 'device' but did not fetch it using the .with() syntax")
+                .ok_or(
+                    "Attempted to acccess 'device' but did not fetch it using the .with() syntax",
+                )
                 .map(|v| v.as_ref())
         }
     }
@@ -2384,20 +2517,28 @@ pub mod device_activity {
         Activity(super::activity::UniqueArgs),
         Device(super::device::UniqueArgs),
     }
-    impl Into<Selection> for WithParam {
-        fn into(self) -> Selection {
+    impl Into<::prisma_client_rust::Selection> for WithParam {
+        fn into(self) -> ::prisma_client_rust::Selection {
             match self {
                 Self::Activity(args) => {
                     let mut selections = super::activity::_outputs();
-                    selections.extend(args.with_params.into_iter().map(Into::<Selection>::into));
-                    let mut builder = Selection::builder("Activity");
+                    selections.extend(
+                        args.with_params
+                            .into_iter()
+                            .map(Into::<::prisma_client_rust::Selection>::into),
+                    );
+                    let mut builder = ::prisma_client_rust::Selection::builder("Activity");
                     builder.nested_selections(selections);
                     builder.build()
                 }
                 Self::Device(args) => {
                     let mut selections = super::device::_outputs();
-                    selections.extend(args.with_params.into_iter().map(Into::<Selection>::into));
-                    let mut builder = Selection::builder("Device");
+                    selections.extend(
+                        args.with_params
+                            .into_iter()
+                            .map(Into::<::prisma_client_rust::Selection>::into),
+                    );
+                    let mut builder = ::prisma_client_rust::Selection::builder("Device");
                     builder.nested_selections(selections);
                     builder.build()
                 }
@@ -2411,12 +2552,12 @@ pub mod device_activity {
         SetCreatedAt(chrono::DateTime<chrono::FixedOffset>),
         SetActivityId(Option<String>),
         SetDeviceId(String),
-        LinkActivity(super::activity::UniqueWhereParam),
-        UnlinkActivity,
-        LinkDevice(super::device::UniqueWhereParam),
+        ConnectActivity(super::activity::UniqueWhereParam),
+        DisconnectActivity,
+        ConnectDevice(super::device::UniqueWhereParam),
     }
-    impl Into<(String, PrismaValue)> for SetParam {
-        fn into(self) -> (String, PrismaValue) {
+    impl Into<(String, ::prisma_client_rust::PrismaValue)> for SetParam {
+        fn into(self) -> (String, ::prisma_client_rust::PrismaValue) {
             match self {
                 SetParam::SetId(value) => ("ID".to_string(), PrismaValue::String(value)),
                 SetParam::SetUpdatedAt(value) => {
@@ -2429,42 +2570,42 @@ pub mod device_activity {
                     "ActivityId".to_string(),
                     value
                         .map(|value| PrismaValue::String(value))
-                        .unwrap_or(PrismaValue::Null),
+                        .unwrap_or(::prisma_client_rust::PrismaValue::Null),
                 ),
                 SetParam::SetDeviceId(value) => {
                     ("DeviceId".to_string(), PrismaValue::String(value))
                 }
-                SetParam::LinkActivity(where_param) => (
+                SetParam::ConnectActivity(where_param) => (
                     "Activity".to_string(),
-                    PrismaValue::Object(vec![(
+                    ::prisma_client_rust::PrismaValue::Object(vec![(
                         "connect".to_string(),
-                        PrismaValue::Object(
-                            vec![where_param]
+                        ::prisma_client_rust::PrismaValue::Object(
+                            [where_param]
                                 .into_iter()
                                 .map(Into::<super::activity::WhereParam>::into)
-                                .map(Into::<SerializedWhere>::into)
-                                .map(SerializedWhere::transform_equals)
+                                .map(Into::<::prisma_client_rust::SerializedWhere>::into)
+                                .map(::prisma_client_rust::SerializedWhere::transform_equals)
                                 .collect(),
                         ),
                     )]),
                 ),
-                SetParam::UnlinkActivity => (
+                SetParam::DisconnectActivity => (
                     "Activity".to_string(),
-                    PrismaValue::Object(vec![(
+                    ::prisma_client_rust::PrismaValue::Object(vec![(
                         "disconnect".to_string(),
-                        PrismaValue::Boolean(true),
+                        ::prisma_client_rust::PrismaValue::Boolean(true),
                     )]),
                 ),
-                SetParam::LinkDevice(where_param) => (
+                SetParam::ConnectDevice(where_param) => (
                     "Device".to_string(),
-                    PrismaValue::Object(vec![(
+                    ::prisma_client_rust::PrismaValue::Object(vec![(
                         "connect".to_string(),
-                        PrismaValue::Object(
-                            vec![where_param]
+                        ::prisma_client_rust::PrismaValue::Object(
+                            [where_param]
                                 .into_iter()
                                 .map(Into::<super::device::WhereParam>::into)
-                                .map(Into::<SerializedWhere>::into)
-                                .map(SerializedWhere::transform_equals)
+                                .map(Into::<::prisma_client_rust::SerializedWhere>::into)
+                                .map(::prisma_client_rust::SerializedWhere::transform_equals)
                                 .collect(),
                         ),
                     )]),
@@ -2480,27 +2621,28 @@ pub mod device_activity {
         ActivityId(Direction),
         DeviceId(Direction),
     }
-    impl Into<(String, PrismaValue)> for OrderByParam {
-        fn into(self) -> (String, PrismaValue) {
+    impl Into<(String, ::prisma_client_rust::PrismaValue)> for OrderByParam {
+        fn into(self) -> (String, ::prisma_client_rust::PrismaValue) {
             match self {
-                Self::Id(direction) => {
-                    ("ID".to_string(), PrismaValue::String(direction.to_string()))
-                }
+                Self::Id(direction) => (
+                    "ID".to_string(),
+                    ::prisma_client_rust::PrismaValue::String(direction.to_string()),
+                ),
                 Self::UpdatedAt(direction) => (
                     "UpdatedAt".to_string(),
-                    PrismaValue::String(direction.to_string()),
+                    ::prisma_client_rust::PrismaValue::String(direction.to_string()),
                 ),
                 Self::CreatedAt(direction) => (
                     "CreatedAt".to_string(),
-                    PrismaValue::String(direction.to_string()),
+                    ::prisma_client_rust::PrismaValue::String(direction.to_string()),
                 ),
                 Self::ActivityId(direction) => (
                     "ActivityId".to_string(),
-                    PrismaValue::String(direction.to_string()),
+                    ::prisma_client_rust::PrismaValue::String(direction.to_string()),
                 ),
                 Self::DeviceId(direction) => (
                     "DeviceId".to_string(),
-                    PrismaValue::String(direction.to_string()),
+                    ::prisma_client_rust::PrismaValue::String(direction.to_string()),
                 ),
             }
         }
@@ -2509,8 +2651,8 @@ pub mod device_activity {
     pub enum Cursor {
         Id(String),
     }
-    impl Into<(String, PrismaValue)> for Cursor {
-        fn into(self) -> (String, PrismaValue) {
+    impl Into<(String, ::prisma_client_rust::PrismaValue)> for Cursor {
+        fn into(self) -> (String, ::prisma_client_rust::PrismaValue) {
             match self {
                 Self::Id(cursor) => ("ID".to_string(), PrismaValue::String(cursor)),
             }
@@ -2578,139 +2720,139 @@ pub mod device_activity {
         DeviceIs(Vec<super::device::WhereParam>),
         DeviceIsNot(Vec<super::device::WhereParam>),
     }
-    impl Into<SerializedWhere> for WhereParam {
-        fn into(self) -> SerializedWhere {
+    impl Into<::prisma_client_rust::SerializedWhere> for WhereParam {
+        fn into(self) -> ::prisma_client_rust::SerializedWhere {
             match self {
-                Self::Not(value) => SerializedWhere::new(
+                Self::Not(value) => ::prisma_client_rust::SerializedWhere::new(
                     "NOT",
-                    SerializedWhereValue::Object(
+                    ::prisma_client_rust::SerializedWhereValue::Object(
                         value
                             .into_iter()
-                            .map(Into::<SerializedWhere>::into)
+                            .map(Into::<::prisma_client_rust::SerializedWhere>::into)
                             .map(Into::into)
                             .collect(),
                     ),
                 ),
-                Self::Or(value) => SerializedWhere::new(
+                Self::Or(value) => ::prisma_client_rust::SerializedWhere::new(
                     "OR",
-                    SerializedWhereValue::List(
+                    ::prisma_client_rust::SerializedWhereValue::List(
                         value
                             .into_iter()
-                            .map(Into::<SerializedWhere>::into)
+                            .map(Into::<::prisma_client_rust::SerializedWhere>::into)
                             .map(Into::into)
                             .map(|v| vec![v])
-                            .map(PrismaValue::Object)
+                            .map(::prisma_client_rust::PrismaValue::Object)
                             .collect(),
                     ),
                 ),
-                Self::And(value) => SerializedWhere::new(
+                Self::And(value) => ::prisma_client_rust::SerializedWhere::new(
                     "AND",
-                    SerializedWhereValue::Object(
+                    ::prisma_client_rust::SerializedWhereValue::Object(
                         value
                             .into_iter()
-                            .map(Into::<SerializedWhere>::into)
+                            .map(Into::<::prisma_client_rust::SerializedWhere>::into)
                             .map(Into::into)
                             .collect(),
                     ),
                 ),
-                Self::IdEquals(value) => SerializedWhere::new(
+                Self::IdEquals(value) => ::prisma_client_rust::SerializedWhere::new(
                     "ID",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "equals".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::IdInVec(value) => SerializedWhere::new(
+                Self::IdInVec(value) => ::prisma_client_rust::SerializedWhere::new(
                     "ID",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "in".to_string(),
                         PrismaValue::List(
                             value.into_iter().map(|v| PrismaValue::String(v)).collect(),
                         ),
                     )]),
                 ),
-                Self::IdNotInVec(value) => SerializedWhere::new(
+                Self::IdNotInVec(value) => ::prisma_client_rust::SerializedWhere::new(
                     "ID",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "notIn".to_string(),
                         PrismaValue::List(
                             value.into_iter().map(|v| PrismaValue::String(v)).collect(),
                         ),
                     )]),
                 ),
-                Self::IdLt(value) => SerializedWhere::new(
+                Self::IdLt(value) => ::prisma_client_rust::SerializedWhere::new(
                     "ID",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "lt".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::IdLte(value) => SerializedWhere::new(
+                Self::IdLte(value) => ::prisma_client_rust::SerializedWhere::new(
                     "ID",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "lte".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::IdGt(value) => SerializedWhere::new(
+                Self::IdGt(value) => ::prisma_client_rust::SerializedWhere::new(
                     "ID",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "gt".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::IdGte(value) => SerializedWhere::new(
+                Self::IdGte(value) => ::prisma_client_rust::SerializedWhere::new(
                     "ID",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "gte".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::IdContains(value) => SerializedWhere::new(
+                Self::IdContains(value) => ::prisma_client_rust::SerializedWhere::new(
                     "ID",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "contains".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::IdStartsWith(value) => SerializedWhere::new(
+                Self::IdStartsWith(value) => ::prisma_client_rust::SerializedWhere::new(
                     "ID",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "startsWith".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::IdEndsWith(value) => SerializedWhere::new(
+                Self::IdEndsWith(value) => ::prisma_client_rust::SerializedWhere::new(
                     "ID",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "endsWith".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::IdMode(value) => SerializedWhere::new(
+                Self::IdMode(value) => ::prisma_client_rust::SerializedWhere::new(
                     "ID",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "mode".to_string(),
                         PrismaValue::Enum(value.to_string()),
                     )]),
                 ),
-                Self::IdNot(value) => SerializedWhere::new(
+                Self::IdNot(value) => ::prisma_client_rust::SerializedWhere::new(
                     "ID",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "not".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::UpdatedAtEquals(value) => SerializedWhere::new(
+                Self::UpdatedAtEquals(value) => ::prisma_client_rust::SerializedWhere::new(
                     "UpdatedAt",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "equals".to_string(),
                         PrismaValue::DateTime(value),
                     )]),
                 ),
-                Self::UpdatedAtInVec(value) => SerializedWhere::new(
+                Self::UpdatedAtInVec(value) => ::prisma_client_rust::SerializedWhere::new(
                     "UpdatedAt",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "in".to_string(),
                         PrismaValue::List(
                             value
@@ -2720,9 +2862,9 @@ pub mod device_activity {
                         ),
                     )]),
                 ),
-                Self::UpdatedAtNotInVec(value) => SerializedWhere::new(
+                Self::UpdatedAtNotInVec(value) => ::prisma_client_rust::SerializedWhere::new(
                     "UpdatedAt",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "notIn".to_string(),
                         PrismaValue::List(
                             value
@@ -2732,51 +2874,51 @@ pub mod device_activity {
                         ),
                     )]),
                 ),
-                Self::UpdatedAtLt(value) => SerializedWhere::new(
+                Self::UpdatedAtLt(value) => ::prisma_client_rust::SerializedWhere::new(
                     "UpdatedAt",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "lt".to_string(),
                         PrismaValue::DateTime(value),
                     )]),
                 ),
-                Self::UpdatedAtLte(value) => SerializedWhere::new(
+                Self::UpdatedAtLte(value) => ::prisma_client_rust::SerializedWhere::new(
                     "UpdatedAt",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "lte".to_string(),
                         PrismaValue::DateTime(value),
                     )]),
                 ),
-                Self::UpdatedAtGt(value) => SerializedWhere::new(
+                Self::UpdatedAtGt(value) => ::prisma_client_rust::SerializedWhere::new(
                     "UpdatedAt",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "gt".to_string(),
                         PrismaValue::DateTime(value),
                     )]),
                 ),
-                Self::UpdatedAtGte(value) => SerializedWhere::new(
+                Self::UpdatedAtGte(value) => ::prisma_client_rust::SerializedWhere::new(
                     "UpdatedAt",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "gte".to_string(),
                         PrismaValue::DateTime(value),
                     )]),
                 ),
-                Self::UpdatedAtNot(value) => SerializedWhere::new(
+                Self::UpdatedAtNot(value) => ::prisma_client_rust::SerializedWhere::new(
                     "UpdatedAt",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "not".to_string(),
                         PrismaValue::DateTime(value),
                     )]),
                 ),
-                Self::CreatedAtEquals(value) => SerializedWhere::new(
+                Self::CreatedAtEquals(value) => ::prisma_client_rust::SerializedWhere::new(
                     "CreatedAt",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "equals".to_string(),
                         PrismaValue::DateTime(value),
                     )]),
                 ),
-                Self::CreatedAtInVec(value) => SerializedWhere::new(
+                Self::CreatedAtInVec(value) => ::prisma_client_rust::SerializedWhere::new(
                     "CreatedAt",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "in".to_string(),
                         PrismaValue::List(
                             value
@@ -2786,9 +2928,9 @@ pub mod device_activity {
                         ),
                     )]),
                 ),
-                Self::CreatedAtNotInVec(value) => SerializedWhere::new(
+                Self::CreatedAtNotInVec(value) => ::prisma_client_rust::SerializedWhere::new(
                     "CreatedAt",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "notIn".to_string(),
                         PrismaValue::List(
                             value
@@ -2798,267 +2940,267 @@ pub mod device_activity {
                         ),
                     )]),
                 ),
-                Self::CreatedAtLt(value) => SerializedWhere::new(
+                Self::CreatedAtLt(value) => ::prisma_client_rust::SerializedWhere::new(
                     "CreatedAt",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "lt".to_string(),
                         PrismaValue::DateTime(value),
                     )]),
                 ),
-                Self::CreatedAtLte(value) => SerializedWhere::new(
+                Self::CreatedAtLte(value) => ::prisma_client_rust::SerializedWhere::new(
                     "CreatedAt",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "lte".to_string(),
                         PrismaValue::DateTime(value),
                     )]),
                 ),
-                Self::CreatedAtGt(value) => SerializedWhere::new(
+                Self::CreatedAtGt(value) => ::prisma_client_rust::SerializedWhere::new(
                     "CreatedAt",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "gt".to_string(),
                         PrismaValue::DateTime(value),
                     )]),
                 ),
-                Self::CreatedAtGte(value) => SerializedWhere::new(
+                Self::CreatedAtGte(value) => ::prisma_client_rust::SerializedWhere::new(
                     "CreatedAt",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "gte".to_string(),
                         PrismaValue::DateTime(value),
                     )]),
                 ),
-                Self::CreatedAtNot(value) => SerializedWhere::new(
+                Self::CreatedAtNot(value) => ::prisma_client_rust::SerializedWhere::new(
                     "CreatedAt",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "not".to_string(),
                         PrismaValue::DateTime(value),
                     )]),
                 ),
-                Self::ActivityIdEquals(value) => SerializedWhere::new(
+                Self::ActivityIdEquals(value) => ::prisma_client_rust::SerializedWhere::new(
                     "ActivityId",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "equals".to_string(),
                         value
                             .map(|value| PrismaValue::String(value))
                             .unwrap_or(PrismaValue::Null),
                     )]),
                 ),
-                Self::ActivityIdInVec(value) => SerializedWhere::new(
+                Self::ActivityIdInVec(value) => ::prisma_client_rust::SerializedWhere::new(
                     "ActivityId",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "in".to_string(),
                         PrismaValue::List(
                             value.into_iter().map(|v| PrismaValue::String(v)).collect(),
                         ),
                     )]),
                 ),
-                Self::ActivityIdNotInVec(value) => SerializedWhere::new(
+                Self::ActivityIdNotInVec(value) => ::prisma_client_rust::SerializedWhere::new(
                     "ActivityId",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "notIn".to_string(),
                         PrismaValue::List(
                             value.into_iter().map(|v| PrismaValue::String(v)).collect(),
                         ),
                     )]),
                 ),
-                Self::ActivityIdLt(value) => SerializedWhere::new(
+                Self::ActivityIdLt(value) => ::prisma_client_rust::SerializedWhere::new(
                     "ActivityId",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "lt".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::ActivityIdLte(value) => SerializedWhere::new(
+                Self::ActivityIdLte(value) => ::prisma_client_rust::SerializedWhere::new(
                     "ActivityId",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "lte".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::ActivityIdGt(value) => SerializedWhere::new(
+                Self::ActivityIdGt(value) => ::prisma_client_rust::SerializedWhere::new(
                     "ActivityId",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "gt".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::ActivityIdGte(value) => SerializedWhere::new(
+                Self::ActivityIdGte(value) => ::prisma_client_rust::SerializedWhere::new(
                     "ActivityId",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "gte".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::ActivityIdContains(value) => SerializedWhere::new(
+                Self::ActivityIdContains(value) => ::prisma_client_rust::SerializedWhere::new(
                     "ActivityId",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "contains".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::ActivityIdStartsWith(value) => SerializedWhere::new(
+                Self::ActivityIdStartsWith(value) => ::prisma_client_rust::SerializedWhere::new(
                     "ActivityId",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "startsWith".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::ActivityIdEndsWith(value) => SerializedWhere::new(
+                Self::ActivityIdEndsWith(value) => ::prisma_client_rust::SerializedWhere::new(
                     "ActivityId",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "endsWith".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::ActivityIdMode(value) => SerializedWhere::new(
+                Self::ActivityIdMode(value) => ::prisma_client_rust::SerializedWhere::new(
                     "ActivityId",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "mode".to_string(),
                         PrismaValue::Enum(value.to_string()),
                     )]),
                 ),
-                Self::ActivityIdNot(value) => SerializedWhere::new(
+                Self::ActivityIdNot(value) => ::prisma_client_rust::SerializedWhere::new(
                     "ActivityId",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "not".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::DeviceIdEquals(value) => SerializedWhere::new(
+                Self::DeviceIdEquals(value) => ::prisma_client_rust::SerializedWhere::new(
                     "DeviceId",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "equals".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::DeviceIdInVec(value) => SerializedWhere::new(
+                Self::DeviceIdInVec(value) => ::prisma_client_rust::SerializedWhere::new(
                     "DeviceId",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "in".to_string(),
                         PrismaValue::List(
                             value.into_iter().map(|v| PrismaValue::String(v)).collect(),
                         ),
                     )]),
                 ),
-                Self::DeviceIdNotInVec(value) => SerializedWhere::new(
+                Self::DeviceIdNotInVec(value) => ::prisma_client_rust::SerializedWhere::new(
                     "DeviceId",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "notIn".to_string(),
                         PrismaValue::List(
                             value.into_iter().map(|v| PrismaValue::String(v)).collect(),
                         ),
                     )]),
                 ),
-                Self::DeviceIdLt(value) => SerializedWhere::new(
+                Self::DeviceIdLt(value) => ::prisma_client_rust::SerializedWhere::new(
                     "DeviceId",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "lt".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::DeviceIdLte(value) => SerializedWhere::new(
+                Self::DeviceIdLte(value) => ::prisma_client_rust::SerializedWhere::new(
                     "DeviceId",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "lte".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::DeviceIdGt(value) => SerializedWhere::new(
+                Self::DeviceIdGt(value) => ::prisma_client_rust::SerializedWhere::new(
                     "DeviceId",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "gt".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::DeviceIdGte(value) => SerializedWhere::new(
+                Self::DeviceIdGte(value) => ::prisma_client_rust::SerializedWhere::new(
                     "DeviceId",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "gte".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::DeviceIdContains(value) => SerializedWhere::new(
+                Self::DeviceIdContains(value) => ::prisma_client_rust::SerializedWhere::new(
                     "DeviceId",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "contains".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::DeviceIdStartsWith(value) => SerializedWhere::new(
+                Self::DeviceIdStartsWith(value) => ::prisma_client_rust::SerializedWhere::new(
                     "DeviceId",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "startsWith".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::DeviceIdEndsWith(value) => SerializedWhere::new(
+                Self::DeviceIdEndsWith(value) => ::prisma_client_rust::SerializedWhere::new(
                     "DeviceId",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "endsWith".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::DeviceIdMode(value) => SerializedWhere::new(
+                Self::DeviceIdMode(value) => ::prisma_client_rust::SerializedWhere::new(
                     "DeviceId",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "mode".to_string(),
                         PrismaValue::Enum(value.to_string()),
                     )]),
                 ),
-                Self::DeviceIdNot(value) => SerializedWhere::new(
+                Self::DeviceIdNot(value) => ::prisma_client_rust::SerializedWhere::new(
                     "DeviceId",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "not".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::ActivityIs(where_params) => SerializedWhere::new(
+                Self::ActivityIs(where_params) => ::prisma_client_rust::SerializedWhere::new(
                     "Activity",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "is".to_string(),
-                        PrismaValue::Object(
+                        ::prisma_client_rust::PrismaValue::Object(
                             where_params
                                 .into_iter()
-                                .map(Into::<SerializedWhere>::into)
-                                .map(SerializedWhere::transform_equals)
+                                .map(Into::<::prisma_client_rust::SerializedWhere>::into)
+                                .map(::prisma_client_rust::SerializedWhere::transform_equals)
                                 .collect(),
                         ),
                     )]),
                 ),
-                Self::ActivityIsNot(where_params) => SerializedWhere::new(
+                Self::ActivityIsNot(where_params) => ::prisma_client_rust::SerializedWhere::new(
                     "Activity",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "isNot".to_string(),
-                        PrismaValue::Object(
+                        ::prisma_client_rust::PrismaValue::Object(
                             where_params
                                 .into_iter()
-                                .map(Into::<SerializedWhere>::into)
-                                .map(SerializedWhere::transform_equals)
+                                .map(Into::<::prisma_client_rust::SerializedWhere>::into)
+                                .map(::prisma_client_rust::SerializedWhere::transform_equals)
                                 .collect(),
                         ),
                     )]),
                 ),
-                Self::DeviceIs(where_params) => SerializedWhere::new(
+                Self::DeviceIs(where_params) => ::prisma_client_rust::SerializedWhere::new(
                     "Device",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "is".to_string(),
-                        PrismaValue::Object(
+                        ::prisma_client_rust::PrismaValue::Object(
                             where_params
                                 .into_iter()
-                                .map(Into::<SerializedWhere>::into)
-                                .map(SerializedWhere::transform_equals)
+                                .map(Into::<::prisma_client_rust::SerializedWhere>::into)
+                                .map(::prisma_client_rust::SerializedWhere::transform_equals)
                                 .collect(),
                         ),
                     )]),
                 ),
-                Self::DeviceIsNot(where_params) => SerializedWhere::new(
+                Self::DeviceIsNot(where_params) => ::prisma_client_rust::SerializedWhere::new(
                     "Device",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "isNot".to_string(),
-                        PrismaValue::Object(
+                        ::prisma_client_rust::PrismaValue::Object(
                             where_params
                                 .into_iter()
-                                .map(Into::<SerializedWhere>::into)
-                                .map(SerializedWhere::transform_equals)
+                                .map(Into::<::prisma_client_rust::SerializedWhere>::into)
+                                .map(::prisma_client_rust::SerializedWhere::transform_equals)
                                 .collect(),
                         ),
                     )]),
@@ -3086,13 +3228,14 @@ pub mod device_activity {
             }
         }
     }
-    pub type UniqueArgs = prisma_client_rust::UniqueArgs<WithParam>;
-    pub type ManyArgs = prisma_client_rust::ManyArgs<WhereParam, WithParam, OrderByParam, Cursor>;
-    pub type Count<'a> = prisma_client_rust::Count<'a, WhereParam, OrderByParam, Cursor>;
-    pub type Create<'a> = prisma_client_rust::Create<'a, SetParam, WithParam, Data>;
+    pub type UniqueArgs = ::prisma_client_rust::UniqueArgs<WithParam>;
+    pub type ManyArgs = ::prisma_client_rust::ManyArgs<WhereParam, WithParam, OrderByParam, Cursor>;
+    pub type Count<'a> = ::prisma_client_rust::Count<'a, WhereParam, OrderByParam, Cursor>;
+    pub type Create<'a> = ::prisma_client_rust::Create<'a, SetParam, WithParam, Data>;
+    pub type CreateMany<'a> = ::prisma_client_rust::CreateMany<'a, SetParam>;
     pub type FindUnique<'a> =
-        prisma_client_rust::FindUnique<'a, WhereParam, WithParam, SetParam, Data>;
-    pub type FindMany<'a> = prisma_client_rust::FindMany<
+        ::prisma_client_rust::FindUnique<'a, WhereParam, WithParam, SetParam, Data>;
+    pub type FindMany<'a> = ::prisma_client_rust::FindMany<
         'a,
         WhereParam,
         WithParam,
@@ -3102,12 +3245,12 @@ pub mod device_activity {
         Data,
     >;
     pub type FindFirst<'a> =
-        prisma_client_rust::FindFirst<'a, WhereParam, WithParam, OrderByParam, Cursor, Data>;
-    pub type Update<'a> = prisma_client_rust::Update<'a, WhereParam, WithParam, SetParam, Data>;
-    pub type UpdateMany<'a> = prisma_client_rust::UpdateMany<'a, WhereParam, SetParam>;
-    pub type Upsert<'a> = prisma_client_rust::Upsert<'a, WhereParam, SetParam, WithParam, Data>;
-    pub type Delete<'a> = prisma_client_rust::Delete<'a, WhereParam, WithParam, Data>;
-    pub type DeleteMany<'a> = prisma_client_rust::DeleteMany<'a, WhereParam>;
+        ::prisma_client_rust::FindFirst<'a, WhereParam, WithParam, OrderByParam, Cursor, Data>;
+    pub type Update<'a> = ::prisma_client_rust::Update<'a, WhereParam, WithParam, SetParam, Data>;
+    pub type UpdateMany<'a> = ::prisma_client_rust::UpdateMany<'a, WhereParam, SetParam>;
+    pub type Upsert<'a> = ::prisma_client_rust::Upsert<'a, WhereParam, SetParam, WithParam, Data>;
+    pub type Delete<'a> = ::prisma_client_rust::Delete<'a, WhereParam, WithParam, Data>;
+    pub type DeleteMany<'a> = ::prisma_client_rust::DeleteMany<'a, WhereParam>;
     pub struct Actions<'a> {
         pub client: &'a PrismaClient,
     }
@@ -3115,21 +3258,21 @@ pub mod device_activity {
         pub fn find_unique(self, _where: UniqueWhereParam) -> FindUnique<'a> {
             FindUnique::new(
                 self.client._new_query_context(),
-                QueryInfo::new("DeviceActivity", _outputs()),
+                ::prisma_client_rust::QueryInfo::new("DeviceActivity", _outputs()),
                 _where.into(),
             )
         }
         pub fn find_first(self, _where: Vec<WhereParam>) -> FindFirst<'a> {
             FindFirst::new(
                 self.client._new_query_context(),
-                QueryInfo::new("DeviceActivity", _outputs()),
+                ::prisma_client_rust::QueryInfo::new("DeviceActivity", _outputs()),
                 _where,
             )
         }
         pub fn find_many(self, _where: Vec<WhereParam>) -> FindMany<'a> {
             FindMany::new(
                 self.client._new_query_context(),
-                QueryInfo::new("DeviceActivity", _outputs()),
+                ::prisma_client_rust::QueryInfo::new("DeviceActivity", _outputs()),
                 _where,
             )
         }
@@ -3143,14 +3286,32 @@ pub mod device_activity {
             _params.push(device::link(device));
             Create::new(
                 self.client._new_query_context(),
-                QueryInfo::new("DeviceActivity", _outputs()),
+                ::prisma_client_rust::QueryInfo::new("DeviceActivity", _outputs()),
                 _params,
+            )
+        }
+        pub fn create_many(
+            self,
+            data: Vec<(String, super::device::UniqueWhereParam, Vec<SetParam>)>,
+        ) -> CreateMany<'a> {
+            let data = data
+                .into_iter()
+                .map(|(id, device, mut _params)| {
+                    _params.push(id::set(id));
+                    _params.push(device::link(device));
+                    _params
+                })
+                .collect();
+            CreateMany::new(
+                self.client._new_query_context(),
+                ::prisma_client_rust::QueryInfo::new("DeviceActivity", _outputs()),
+                data,
             )
         }
         pub fn update(self, _where: UniqueWhereParam, _params: Vec<SetParam>) -> Update<'a> {
             Update::new(
                 self.client._new_query_context(),
-                QueryInfo::new("DeviceActivity", _outputs()),
+                ::prisma_client_rust::QueryInfo::new("DeviceActivity", _outputs()),
                 _where.into(),
                 _params,
                 vec![],
@@ -3163,24 +3324,9 @@ pub mod device_activity {
         ) -> UpdateMany<'a> {
             UpdateMany::new(
                 self.client._new_query_context(),
-                QueryInfo::new("DeviceActivity", _outputs()),
+                ::prisma_client_rust::QueryInfo::new("DeviceActivity", _outputs()),
                 _where,
                 _params,
-            )
-        }
-        pub fn delete(self, _where: UniqueWhereParam) -> Delete<'a> {
-            Delete::new(
-                self.client._new_query_context(),
-                QueryInfo::new("DeviceActivity", _outputs()),
-                _where.into(),
-                vec![],
-            )
-        }
-        pub fn delete_many(self, _where: Vec<WhereParam>) -> DeleteMany<'a> {
-            DeleteMany::new(
-                self.client._new_query_context(),
-                QueryInfo::new("DeviceActivity", _outputs()),
-                _where.into(),
             )
         }
         pub fn upsert(
@@ -3193,16 +3339,31 @@ pub mod device_activity {
             _params.push(device::link(device));
             Upsert::new(
                 self.client._new_query_context(),
-                QueryInfo::new("DeviceActivity", _outputs()),
+                ::prisma_client_rust::QueryInfo::new("DeviceActivity", _outputs()),
                 _where.into(),
                 _params,
                 _update,
             )
         }
+        pub fn delete(self, _where: UniqueWhereParam) -> Delete<'a> {
+            Delete::new(
+                self.client._new_query_context(),
+                ::prisma_client_rust::QueryInfo::new("DeviceActivity", _outputs()),
+                _where.into(),
+                vec![],
+            )
+        }
+        pub fn delete_many(self, _where: Vec<WhereParam>) -> DeleteMany<'a> {
+            DeleteMany::new(
+                self.client._new_query_context(),
+                ::prisma_client_rust::QueryInfo::new("DeviceActivity", _outputs()),
+                _where.into(),
+            )
+        }
         pub fn count(self) -> Count<'a> {
             Count::new(
                 self.client._new_query_context(),
-                QueryInfo::new("DeviceActivity", _outputs()),
+                ::prisma_client_rust::QueryInfo::new("DeviceActivity", _outputs()),
                 vec![],
             )
         }
@@ -3398,7 +3559,7 @@ pub mod user {
                 self.0 = self.0.with(params.into());
                 self
             }
-            pub fn order_by(mut self, param: activity::OrderByParam) -> Self {
+            pub fn order_by(mut self, param: impl Into<activity::OrderByParam>) -> Self {
                 self.0 = self.0.order_by(param);
                 self
             }
@@ -3427,25 +3588,39 @@ pub mod user {
             Link(params).into()
         }
         pub fn unlink(params: Vec<activity::UniqueWhereParam>) -> SetParam {
-            SetParam::UnlinkActivity(params)
+            SetParam::DisconnectActivity(params)
+        }
+        pub fn set(params: Vec<activity::UniqueWhereParam>) -> SetParam {
+            SetParam::SetActivity(params)
         }
         pub struct Link(pub Vec<activity::UniqueWhereParam>);
         impl From<Link> for SetParam {
             fn from(value: Link) -> Self {
-                Self::LinkActivity(value.0)
+                Self::ConnectActivity(value.0)
             }
         }
     }
-    pub fn _outputs() -> Vec<Selection> {
+    pub fn _outputs() -> Vec<::prisma_client_rust::Selection> {
         ["ID", "Name", "ApiKey"]
             .into_iter()
             .map(|o| {
-                let builder = Selection::builder(o);
+                let builder = ::prisma_client_rust::Selection::builder(o);
                 builder.build()
             })
             .collect()
     }
-    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub fn create(
+        id: String,
+        name: String,
+        api_key: String,
+        _params: Vec<SetParam>,
+    ) -> (String, String, String, Vec<SetParam>) {
+        (id, name, api_key, _params)
+    }
+    #[macro_export]
+    macro_rules ! _select_user { ($ ($ field : ident $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? $ ({ $ ($ selections : tt) + }) ?) +) => { { $ crate :: prisma :: user :: select ! (@ definitions ; $ ($ field $ (($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) *) ? $ ({ $ ($ selections) + }) ?) +) ; Select ($ crate :: prisma :: user :: select ! (@ select_fields_to_selections ; $ ($ field $ (($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) *) ? $ ({ $ ($ selections) + }) ?) +)) } } ; (@ definitions ; $ ($ field : ident $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? $ ({ $ ($ selections : tt) + }) ?) +) => { # [allow (warnings)] enum Fields { id , name , api_key , activity } # [allow (warnings)] impl Fields { fn selections () { $ (let _ = Fields :: $ field ;) + } } # [derive (:: serde :: Deserialize , :: serde :: Serialize)] # [allow (warnings)] pub struct Data { $ ($ field : $ crate :: prisma :: user :: select ! (@ field_type ; $ field $ ({ $ ($ selections) + }) ?) ,) + } $ ($ (pub mod $ field { $ crate :: prisma :: user :: select ! (@ field_module ; $ field { $ ($ selections) + }) ; }) ?) + pub struct Select (pub Vec < :: prisma_client_rust :: Selection >) ; impl :: prisma_client_rust :: select :: SelectType < $ crate :: prisma :: user :: Data > for Select { type Data = Data ; fn to_selections (self) -> Vec < :: prisma_client_rust :: Selection > { self . 0 } } } ; (@ field_type ; id) => { String } ; (@ field_type ; name) => { String } ; (@ field_type ; api_key) => { String } ; (@ field_type ; activity { $ ($ selections : tt) + }) => { Vec < activity :: Data > } ; (@ field_type ; activity) => { Vec < crate :: prisma :: activity :: Data > } ; (@ field_type ; $ field : ident $ ($ tokens : tt) *) => { compile_error ! (stringify ! (Cannot select field nonexistent field $ field on model user)) } ; (@ field_module ; activity { $ ($ selections : tt) + }) => { $ crate :: prisma :: activity :: select ! (@ definitions ; $ ($ selections) +) ; } ; (@ field_module ; $ ($ tokens : tt) *) => { } ; (@ select_fields_to_selections ; $ ($ field : ident $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? $ ({ $ ($ selections : tt) + }) ?) +) => { vec ! [$ ($ crate :: prisma :: user :: select ! (@ select_field_to_selection ; $ field $ (($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) *) ? $ ({ $ ($ selections) + }) ?)) , +] } ; (@ select_field_to_selection ; id) => { :: prisma_client_rust :: Selection :: builder ("ID") . build () } ; (@ select_field_to_selection ; name) => { :: prisma_client_rust :: Selection :: builder ("Name") . build () } ; (@ select_field_to_selection ; api_key) => { :: prisma_client_rust :: Selection :: builder ("ApiKey") . build () } ; (@ select_field_to_selection ; activity $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ? { $ ($ selections : tt) + }) => { { # [allow (warnings)] let mut selection = :: prisma_client_rust :: Selection :: builder ("Activity") ; $ (let args = $ crate :: prisma :: activity :: ManyArgs :: new ($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) * ; selection . set_arguments (args . to_graphql () . 0) ;) ? selection . nested_selections ($ crate :: prisma :: activity :: select ! (@ select_fields_to_selections ; $ ($ selections) +)) ; selection . build () } } ; (@ select_field_to_selection ; activity $ (($ ($ filters : tt) +) $ (. $ arg : ident ($ ($ arg_params : tt) *)) *) ?) => { { # [allow (warnings)] let mut selection = :: prisma_client_rust :: Selection :: builder ("Activity") ; $ (let args = $ crate :: prisma :: activity :: ManyArgs :: new ($ ($ filters) +) $ (. $ arg ($ ($ arg_params) *)) * ; selection . set_arguments (args . to_graphql () . 0) ;) ? selection . nested_selections ($ crate :: prisma :: activity :: _outputs ()) ; selection . build () } } ; (@ select_field_to_selection ; $ ($ tokens : tt) *) => { :: prisma_client_rust :: Selection :: builder ("") . build () } ; }
+    pub use _select_user as select;
+    #[derive(Debug, Clone, :: serde :: Serialize, :: serde :: Deserialize)]
     pub struct Data {
         #[serde(rename = "ID")]
         pub id: String,
@@ -3459,7 +3634,7 @@ pub mod user {
     impl Data {
         pub fn activity(&self) -> Result<&Vec<super::activity::Data>, &'static str> {
             self.activity.as_ref().ok_or(
-                "Attempted to access 'activity' but did not fetch it using the .with() syntax",
+                "Attempted to acccess 'activity' but did not fetch it using the .with() syntax",
             )
         }
     }
@@ -3467,13 +3642,13 @@ pub mod user {
     pub enum WithParam {
         Activity(super::activity::ManyArgs),
     }
-    impl Into<Selection> for WithParam {
-        fn into(self) -> Selection {
+    impl Into<::prisma_client_rust::Selection> for WithParam {
+        fn into(self) -> ::prisma_client_rust::Selection {
             match self {
                 Self::Activity(args) => {
                     let (arguments, mut nested_selections) = args.to_graphql();
                     nested_selections.extend(super::activity::_outputs());
-                    let mut builder = Selection::builder("Activity");
+                    let mut builder = ::prisma_client_rust::Selection::builder("Activity");
                     builder
                         .nested_selections(nested_selections)
                         .set_arguments(arguments);
@@ -3487,39 +3662,57 @@ pub mod user {
         SetId(String),
         SetName(String),
         SetApiKey(String),
-        LinkActivity(Vec<super::activity::UniqueWhereParam>),
-        UnlinkActivity(Vec<super::activity::UniqueWhereParam>),
+        ConnectActivity(Vec<super::activity::UniqueWhereParam>),
+        DisconnectActivity(Vec<super::activity::UniqueWhereParam>),
+        SetActivity(Vec<super::activity::UniqueWhereParam>),
     }
-    impl Into<(String, PrismaValue)> for SetParam {
-        fn into(self) -> (String, PrismaValue) {
+    impl Into<(String, ::prisma_client_rust::PrismaValue)> for SetParam {
+        fn into(self) -> (String, ::prisma_client_rust::PrismaValue) {
             match self {
                 SetParam::SetId(value) => ("ID".to_string(), PrismaValue::String(value)),
                 SetParam::SetName(value) => ("Name".to_string(), PrismaValue::String(value)),
                 SetParam::SetApiKey(value) => ("ApiKey".to_string(), PrismaValue::String(value)),
-                SetParam::LinkActivity(where_params) => (
+                SetParam::ConnectActivity(where_params) => (
                     "Activity".to_string(),
-                    PrismaValue::Object(vec![(
+                    ::prisma_client_rust::PrismaValue::Object(vec![(
                         "connect".to_string(),
-                        PrismaValue::Object(
+                        ::prisma_client_rust::PrismaValue::List(
                             where_params
                                 .into_iter()
                                 .map(Into::<super::activity::WhereParam>::into)
-                                .map(Into::<SerializedWhere>::into)
-                                .map(SerializedWhere::transform_equals)
+                                .map(Into::<::prisma_client_rust::SerializedWhere>::into)
+                                .map(::prisma_client_rust::SerializedWhere::transform_equals)
+                                .map(|v| ::prisma_client_rust::PrismaValue::Object(vec![v]))
                                 .collect(),
                         ),
                     )]),
                 ),
-                SetParam::UnlinkActivity(where_params) => (
+                SetParam::DisconnectActivity(where_params) => (
                     "Activity".to_string(),
-                    PrismaValue::Object(vec![(
+                    ::prisma_client_rust::PrismaValue::Object(vec![(
                         "disconnect".to_string(),
-                        PrismaValue::Object(
+                        ::prisma_client_rust::PrismaValue::List(
                             where_params
                                 .into_iter()
                                 .map(Into::<super::activity::WhereParam>::into)
-                                .map(Into::<SerializedWhere>::into)
-                                .map(SerializedWhere::transform_equals)
+                                .map(Into::<::prisma_client_rust::SerializedWhere>::into)
+                                .map(::prisma_client_rust::SerializedWhere::transform_equals)
+                                .map(|v| ::prisma_client_rust::PrismaValue::Object(vec![v]))
+                                .collect(),
+                        ),
+                    )]),
+                ),
+                SetParam::SetActivity(where_params) => (
+                    "Activity".to_string(),
+                    ::prisma_client_rust::PrismaValue::Object(vec![(
+                        "set".to_string(),
+                        ::prisma_client_rust::PrismaValue::List(
+                            where_params
+                                .into_iter()
+                                .map(Into::<super::activity::WhereParam>::into)
+                                .map(Into::<::prisma_client_rust::SerializedWhere>::into)
+                                .map(::prisma_client_rust::SerializedWhere::transform_equals)
+                                .map(|v| ::prisma_client_rust::PrismaValue::Object(vec![v]))
                                 .collect(),
                         ),
                     )]),
@@ -3533,19 +3726,20 @@ pub mod user {
         Name(Direction),
         ApiKey(Direction),
     }
-    impl Into<(String, PrismaValue)> for OrderByParam {
-        fn into(self) -> (String, PrismaValue) {
+    impl Into<(String, ::prisma_client_rust::PrismaValue)> for OrderByParam {
+        fn into(self) -> (String, ::prisma_client_rust::PrismaValue) {
             match self {
-                Self::Id(direction) => {
-                    ("ID".to_string(), PrismaValue::String(direction.to_string()))
-                }
+                Self::Id(direction) => (
+                    "ID".to_string(),
+                    ::prisma_client_rust::PrismaValue::String(direction.to_string()),
+                ),
                 Self::Name(direction) => (
                     "Name".to_string(),
-                    PrismaValue::String(direction.to_string()),
+                    ::prisma_client_rust::PrismaValue::String(direction.to_string()),
                 ),
                 Self::ApiKey(direction) => (
                     "ApiKey".to_string(),
-                    PrismaValue::String(direction.to_string()),
+                    ::prisma_client_rust::PrismaValue::String(direction.to_string()),
                 ),
             }
         }
@@ -3556,8 +3750,8 @@ pub mod user {
         Name(String),
         ApiKey(String),
     }
-    impl Into<(String, PrismaValue)> for Cursor {
-        fn into(self) -> (String, PrismaValue) {
+    impl Into<(String, ::prisma_client_rust::PrismaValue)> for Cursor {
+        fn into(self) -> (String, ::prisma_client_rust::PrismaValue) {
             match self {
                 Self::Id(cursor) => ("ID".to_string(), PrismaValue::String(cursor)),
                 Self::Name(cursor) => ("Name".to_string(), PrismaValue::String(cursor)),
@@ -3610,340 +3804,340 @@ pub mod user {
         ActivityEvery(Vec<super::activity::WhereParam>),
         ActivityNone(Vec<super::activity::WhereParam>),
     }
-    impl Into<SerializedWhere> for WhereParam {
-        fn into(self) -> SerializedWhere {
+    impl Into<::prisma_client_rust::SerializedWhere> for WhereParam {
+        fn into(self) -> ::prisma_client_rust::SerializedWhere {
             match self {
-                Self::Not(value) => SerializedWhere::new(
+                Self::Not(value) => ::prisma_client_rust::SerializedWhere::new(
                     "NOT",
-                    SerializedWhereValue::Object(
+                    ::prisma_client_rust::SerializedWhereValue::Object(
                         value
                             .into_iter()
-                            .map(Into::<SerializedWhere>::into)
+                            .map(Into::<::prisma_client_rust::SerializedWhere>::into)
                             .map(Into::into)
                             .collect(),
                     ),
                 ),
-                Self::Or(value) => SerializedWhere::new(
+                Self::Or(value) => ::prisma_client_rust::SerializedWhere::new(
                     "OR",
-                    SerializedWhereValue::List(
+                    ::prisma_client_rust::SerializedWhereValue::List(
                         value
                             .into_iter()
-                            .map(Into::<SerializedWhere>::into)
+                            .map(Into::<::prisma_client_rust::SerializedWhere>::into)
                             .map(Into::into)
                             .map(|v| vec![v])
-                            .map(PrismaValue::Object)
+                            .map(::prisma_client_rust::PrismaValue::Object)
                             .collect(),
                     ),
                 ),
-                Self::And(value) => SerializedWhere::new(
+                Self::And(value) => ::prisma_client_rust::SerializedWhere::new(
                     "AND",
-                    SerializedWhereValue::Object(
+                    ::prisma_client_rust::SerializedWhereValue::Object(
                         value
                             .into_iter()
-                            .map(Into::<SerializedWhere>::into)
+                            .map(Into::<::prisma_client_rust::SerializedWhere>::into)
                             .map(Into::into)
                             .collect(),
                     ),
                 ),
-                Self::IdEquals(value) => SerializedWhere::new(
+                Self::IdEquals(value) => ::prisma_client_rust::SerializedWhere::new(
                     "ID",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "equals".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::IdInVec(value) => SerializedWhere::new(
+                Self::IdInVec(value) => ::prisma_client_rust::SerializedWhere::new(
                     "ID",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "in".to_string(),
                         PrismaValue::List(
                             value.into_iter().map(|v| PrismaValue::String(v)).collect(),
                         ),
                     )]),
                 ),
-                Self::IdNotInVec(value) => SerializedWhere::new(
+                Self::IdNotInVec(value) => ::prisma_client_rust::SerializedWhere::new(
                     "ID",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "notIn".to_string(),
                         PrismaValue::List(
                             value.into_iter().map(|v| PrismaValue::String(v)).collect(),
                         ),
                     )]),
                 ),
-                Self::IdLt(value) => SerializedWhere::new(
+                Self::IdLt(value) => ::prisma_client_rust::SerializedWhere::new(
                     "ID",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "lt".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::IdLte(value) => SerializedWhere::new(
+                Self::IdLte(value) => ::prisma_client_rust::SerializedWhere::new(
                     "ID",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "lte".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::IdGt(value) => SerializedWhere::new(
+                Self::IdGt(value) => ::prisma_client_rust::SerializedWhere::new(
                     "ID",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "gt".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::IdGte(value) => SerializedWhere::new(
+                Self::IdGte(value) => ::prisma_client_rust::SerializedWhere::new(
                     "ID",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "gte".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::IdContains(value) => SerializedWhere::new(
+                Self::IdContains(value) => ::prisma_client_rust::SerializedWhere::new(
                     "ID",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "contains".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::IdStartsWith(value) => SerializedWhere::new(
+                Self::IdStartsWith(value) => ::prisma_client_rust::SerializedWhere::new(
                     "ID",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "startsWith".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::IdEndsWith(value) => SerializedWhere::new(
+                Self::IdEndsWith(value) => ::prisma_client_rust::SerializedWhere::new(
                     "ID",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "endsWith".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::IdMode(value) => SerializedWhere::new(
+                Self::IdMode(value) => ::prisma_client_rust::SerializedWhere::new(
                     "ID",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "mode".to_string(),
                         PrismaValue::Enum(value.to_string()),
                     )]),
                 ),
-                Self::IdNot(value) => SerializedWhere::new(
+                Self::IdNot(value) => ::prisma_client_rust::SerializedWhere::new(
                     "ID",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "not".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::NameEquals(value) => SerializedWhere::new(
+                Self::NameEquals(value) => ::prisma_client_rust::SerializedWhere::new(
                     "Name",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "equals".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::NameInVec(value) => SerializedWhere::new(
+                Self::NameInVec(value) => ::prisma_client_rust::SerializedWhere::new(
                     "Name",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "in".to_string(),
                         PrismaValue::List(
                             value.into_iter().map(|v| PrismaValue::String(v)).collect(),
                         ),
                     )]),
                 ),
-                Self::NameNotInVec(value) => SerializedWhere::new(
+                Self::NameNotInVec(value) => ::prisma_client_rust::SerializedWhere::new(
                     "Name",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "notIn".to_string(),
                         PrismaValue::List(
                             value.into_iter().map(|v| PrismaValue::String(v)).collect(),
                         ),
                     )]),
                 ),
-                Self::NameLt(value) => SerializedWhere::new(
+                Self::NameLt(value) => ::prisma_client_rust::SerializedWhere::new(
                     "Name",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "lt".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::NameLte(value) => SerializedWhere::new(
+                Self::NameLte(value) => ::prisma_client_rust::SerializedWhere::new(
                     "Name",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "lte".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::NameGt(value) => SerializedWhere::new(
+                Self::NameGt(value) => ::prisma_client_rust::SerializedWhere::new(
                     "Name",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "gt".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::NameGte(value) => SerializedWhere::new(
+                Self::NameGte(value) => ::prisma_client_rust::SerializedWhere::new(
                     "Name",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "gte".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::NameContains(value) => SerializedWhere::new(
+                Self::NameContains(value) => ::prisma_client_rust::SerializedWhere::new(
                     "Name",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "contains".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::NameStartsWith(value) => SerializedWhere::new(
+                Self::NameStartsWith(value) => ::prisma_client_rust::SerializedWhere::new(
                     "Name",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "startsWith".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::NameEndsWith(value) => SerializedWhere::new(
+                Self::NameEndsWith(value) => ::prisma_client_rust::SerializedWhere::new(
                     "Name",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "endsWith".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::NameMode(value) => SerializedWhere::new(
+                Self::NameMode(value) => ::prisma_client_rust::SerializedWhere::new(
                     "Name",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "mode".to_string(),
                         PrismaValue::Enum(value.to_string()),
                     )]),
                 ),
-                Self::NameNot(value) => SerializedWhere::new(
+                Self::NameNot(value) => ::prisma_client_rust::SerializedWhere::new(
                     "Name",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "not".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::ApiKeyEquals(value) => SerializedWhere::new(
+                Self::ApiKeyEquals(value) => ::prisma_client_rust::SerializedWhere::new(
                     "ApiKey",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "equals".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::ApiKeyInVec(value) => SerializedWhere::new(
+                Self::ApiKeyInVec(value) => ::prisma_client_rust::SerializedWhere::new(
                     "ApiKey",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "in".to_string(),
                         PrismaValue::List(
                             value.into_iter().map(|v| PrismaValue::String(v)).collect(),
                         ),
                     )]),
                 ),
-                Self::ApiKeyNotInVec(value) => SerializedWhere::new(
+                Self::ApiKeyNotInVec(value) => ::prisma_client_rust::SerializedWhere::new(
                     "ApiKey",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "notIn".to_string(),
                         PrismaValue::List(
                             value.into_iter().map(|v| PrismaValue::String(v)).collect(),
                         ),
                     )]),
                 ),
-                Self::ApiKeyLt(value) => SerializedWhere::new(
+                Self::ApiKeyLt(value) => ::prisma_client_rust::SerializedWhere::new(
                     "ApiKey",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "lt".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::ApiKeyLte(value) => SerializedWhere::new(
+                Self::ApiKeyLte(value) => ::prisma_client_rust::SerializedWhere::new(
                     "ApiKey",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "lte".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::ApiKeyGt(value) => SerializedWhere::new(
+                Self::ApiKeyGt(value) => ::prisma_client_rust::SerializedWhere::new(
                     "ApiKey",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "gt".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::ApiKeyGte(value) => SerializedWhere::new(
+                Self::ApiKeyGte(value) => ::prisma_client_rust::SerializedWhere::new(
                     "ApiKey",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "gte".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::ApiKeyContains(value) => SerializedWhere::new(
+                Self::ApiKeyContains(value) => ::prisma_client_rust::SerializedWhere::new(
                     "ApiKey",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "contains".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::ApiKeyStartsWith(value) => SerializedWhere::new(
+                Self::ApiKeyStartsWith(value) => ::prisma_client_rust::SerializedWhere::new(
                     "ApiKey",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "startsWith".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::ApiKeyEndsWith(value) => SerializedWhere::new(
+                Self::ApiKeyEndsWith(value) => ::prisma_client_rust::SerializedWhere::new(
                     "ApiKey",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "endsWith".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::ApiKeyMode(value) => SerializedWhere::new(
+                Self::ApiKeyMode(value) => ::prisma_client_rust::SerializedWhere::new(
                     "ApiKey",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "mode".to_string(),
                         PrismaValue::Enum(value.to_string()),
                     )]),
                 ),
-                Self::ApiKeyNot(value) => SerializedWhere::new(
+                Self::ApiKeyNot(value) => ::prisma_client_rust::SerializedWhere::new(
                     "ApiKey",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "not".to_string(),
                         PrismaValue::String(value),
                     )]),
                 ),
-                Self::ActivitySome(where_params) => SerializedWhere::new(
+                Self::ActivitySome(where_params) => ::prisma_client_rust::SerializedWhere::new(
                     "Activity",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "some".to_string(),
-                        PrismaValue::Object(
+                        ::prisma_client_rust::PrismaValue::Object(
                             where_params
                                 .into_iter()
-                                .map(Into::<SerializedWhere>::into)
-                                .map(SerializedWhere::transform_equals)
+                                .map(Into::<::prisma_client_rust::SerializedWhere>::into)
+                                .map(::prisma_client_rust::SerializedWhere::transform_equals)
                                 .collect(),
                         ),
                     )]),
                 ),
-                Self::ActivityEvery(where_params) => SerializedWhere::new(
+                Self::ActivityEvery(where_params) => ::prisma_client_rust::SerializedWhere::new(
                     "Activity",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "every".to_string(),
-                        PrismaValue::Object(
+                        ::prisma_client_rust::PrismaValue::Object(
                             where_params
                                 .into_iter()
-                                .map(Into::<SerializedWhere>::into)
-                                .map(SerializedWhere::transform_equals)
+                                .map(Into::<::prisma_client_rust::SerializedWhere>::into)
+                                .map(::prisma_client_rust::SerializedWhere::transform_equals)
                                 .collect(),
                         ),
                     )]),
                 ),
-                Self::ActivityNone(where_params) => SerializedWhere::new(
+                Self::ActivityNone(where_params) => ::prisma_client_rust::SerializedWhere::new(
                     "Activity",
-                    SerializedWhereValue::Object(vec![(
+                    ::prisma_client_rust::SerializedWhereValue::Object(vec![(
                         "none".to_string(),
-                        PrismaValue::Object(
+                        ::prisma_client_rust::PrismaValue::Object(
                             where_params
                                 .into_iter()
-                                .map(Into::<SerializedWhere>::into)
-                                .map(SerializedWhere::transform_equals)
+                                .map(Into::<::prisma_client_rust::SerializedWhere>::into)
+                                .map(::prisma_client_rust::SerializedWhere::transform_equals)
                                 .collect(),
                         ),
                     )]),
@@ -3975,13 +4169,14 @@ pub mod user {
             }
         }
     }
-    pub type UniqueArgs = prisma_client_rust::UniqueArgs<WithParam>;
-    pub type ManyArgs = prisma_client_rust::ManyArgs<WhereParam, WithParam, OrderByParam, Cursor>;
-    pub type Count<'a> = prisma_client_rust::Count<'a, WhereParam, OrderByParam, Cursor>;
-    pub type Create<'a> = prisma_client_rust::Create<'a, SetParam, WithParam, Data>;
+    pub type UniqueArgs = ::prisma_client_rust::UniqueArgs<WithParam>;
+    pub type ManyArgs = ::prisma_client_rust::ManyArgs<WhereParam, WithParam, OrderByParam, Cursor>;
+    pub type Count<'a> = ::prisma_client_rust::Count<'a, WhereParam, OrderByParam, Cursor>;
+    pub type Create<'a> = ::prisma_client_rust::Create<'a, SetParam, WithParam, Data>;
+    pub type CreateMany<'a> = ::prisma_client_rust::CreateMany<'a, SetParam>;
     pub type FindUnique<'a> =
-        prisma_client_rust::FindUnique<'a, WhereParam, WithParam, SetParam, Data>;
-    pub type FindMany<'a> = prisma_client_rust::FindMany<
+        ::prisma_client_rust::FindUnique<'a, WhereParam, WithParam, SetParam, Data>;
+    pub type FindMany<'a> = ::prisma_client_rust::FindMany<
         'a,
         WhereParam,
         WithParam,
@@ -3991,12 +4186,12 @@ pub mod user {
         Data,
     >;
     pub type FindFirst<'a> =
-        prisma_client_rust::FindFirst<'a, WhereParam, WithParam, OrderByParam, Cursor, Data>;
-    pub type Update<'a> = prisma_client_rust::Update<'a, WhereParam, WithParam, SetParam, Data>;
-    pub type UpdateMany<'a> = prisma_client_rust::UpdateMany<'a, WhereParam, SetParam>;
-    pub type Upsert<'a> = prisma_client_rust::Upsert<'a, WhereParam, SetParam, WithParam, Data>;
-    pub type Delete<'a> = prisma_client_rust::Delete<'a, WhereParam, WithParam, Data>;
-    pub type DeleteMany<'a> = prisma_client_rust::DeleteMany<'a, WhereParam>;
+        ::prisma_client_rust::FindFirst<'a, WhereParam, WithParam, OrderByParam, Cursor, Data>;
+    pub type Update<'a> = ::prisma_client_rust::Update<'a, WhereParam, WithParam, SetParam, Data>;
+    pub type UpdateMany<'a> = ::prisma_client_rust::UpdateMany<'a, WhereParam, SetParam>;
+    pub type Upsert<'a> = ::prisma_client_rust::Upsert<'a, WhereParam, SetParam, WithParam, Data>;
+    pub type Delete<'a> = ::prisma_client_rust::Delete<'a, WhereParam, WithParam, Data>;
+    pub type DeleteMany<'a> = ::prisma_client_rust::DeleteMany<'a, WhereParam>;
     pub struct Actions<'a> {
         pub client: &'a PrismaClient,
     }
@@ -4004,21 +4199,21 @@ pub mod user {
         pub fn find_unique(self, _where: UniqueWhereParam) -> FindUnique<'a> {
             FindUnique::new(
                 self.client._new_query_context(),
-                QueryInfo::new("User", _outputs()),
+                ::prisma_client_rust::QueryInfo::new("User", _outputs()),
                 _where.into(),
             )
         }
         pub fn find_first(self, _where: Vec<WhereParam>) -> FindFirst<'a> {
             FindFirst::new(
                 self.client._new_query_context(),
-                QueryInfo::new("User", _outputs()),
+                ::prisma_client_rust::QueryInfo::new("User", _outputs()),
                 _where,
             )
         }
         pub fn find_many(self, _where: Vec<WhereParam>) -> FindMany<'a> {
             FindMany::new(
                 self.client._new_query_context(),
-                QueryInfo::new("User", _outputs()),
+                ::prisma_client_rust::QueryInfo::new("User", _outputs()),
                 _where,
             )
         }
@@ -4034,14 +4229,33 @@ pub mod user {
             _params.push(api_key::set(api_key));
             Create::new(
                 self.client._new_query_context(),
-                QueryInfo::new("User", _outputs()),
+                ::prisma_client_rust::QueryInfo::new("User", _outputs()),
                 _params,
+            )
+        }
+        pub fn create_many(
+            self,
+            data: Vec<(String, String, String, Vec<SetParam>)>,
+        ) -> CreateMany<'a> {
+            let data = data
+                .into_iter()
+                .map(|(id, name, api_key, mut _params)| {
+                    _params.push(id::set(id));
+                    _params.push(name::set(name));
+                    _params.push(api_key::set(api_key));
+                    _params
+                })
+                .collect();
+            CreateMany::new(
+                self.client._new_query_context(),
+                ::prisma_client_rust::QueryInfo::new("User", _outputs()),
+                data,
             )
         }
         pub fn update(self, _where: UniqueWhereParam, _params: Vec<SetParam>) -> Update<'a> {
             Update::new(
                 self.client._new_query_context(),
-                QueryInfo::new("User", _outputs()),
+                ::prisma_client_rust::QueryInfo::new("User", _outputs()),
                 _where.into(),
                 _params,
                 vec![],
@@ -4054,24 +4268,9 @@ pub mod user {
         ) -> UpdateMany<'a> {
             UpdateMany::new(
                 self.client._new_query_context(),
-                QueryInfo::new("User", _outputs()),
+                ::prisma_client_rust::QueryInfo::new("User", _outputs()),
                 _where,
                 _params,
-            )
-        }
-        pub fn delete(self, _where: UniqueWhereParam) -> Delete<'a> {
-            Delete::new(
-                self.client._new_query_context(),
-                QueryInfo::new("User", _outputs()),
-                _where.into(),
-                vec![],
-            )
-        }
-        pub fn delete_many(self, _where: Vec<WhereParam>) -> DeleteMany<'a> {
-            DeleteMany::new(
-                self.client._new_query_context(),
-                QueryInfo::new("User", _outputs()),
-                _where.into(),
             )
         }
         pub fn upsert(
@@ -4085,88 +4284,110 @@ pub mod user {
             _params.push(api_key::set(api_key));
             Upsert::new(
                 self.client._new_query_context(),
-                QueryInfo::new("User", _outputs()),
+                ::prisma_client_rust::QueryInfo::new("User", _outputs()),
                 _where.into(),
                 _params,
                 _update,
             )
         }
+        pub fn delete(self, _where: UniqueWhereParam) -> Delete<'a> {
+            Delete::new(
+                self.client._new_query_context(),
+                ::prisma_client_rust::QueryInfo::new("User", _outputs()),
+                _where.into(),
+                vec![],
+            )
+        }
+        pub fn delete_many(self, _where: Vec<WhereParam>) -> DeleteMany<'a> {
+            DeleteMany::new(
+                self.client._new_query_context(),
+                ::prisma_client_rust::QueryInfo::new("User", _outputs()),
+                _where.into(),
+            )
+        }
         pub fn count(self) -> Count<'a> {
             Count::new(
                 self.client._new_query_context(),
-                QueryInfo::new("User", _outputs()),
+                ::prisma_client_rust::QueryInfo::new("User", _outputs()),
                 vec![],
             )
         }
     }
 }
 pub mod _prisma {
-    use super::*;
-    use prisma_client_rust::{
-        queries::QueryContext,
-        query_core::{QueryExecutor, QuerySchema},
-        raw, ExecuteRaw, QueryRaw,
-    };
-    use serde::{Deserialize, Serialize};
-    use std::fmt;
-    use std::sync::Arc;
     pub struct PrismaClient {
-        executor: Box<dyn QueryExecutor + Send + Sync + 'static>,
-        query_schema: Arc<QuerySchema>,
+        executor: Box<dyn ::prisma_client_rust::query_core::QueryExecutor + Send + Sync + 'static>,
+        query_schema: ::std::sync::Arc<::prisma_client_rust::schema::QuerySchema>,
     }
-    impl fmt::Debug for PrismaClient {
-        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    impl ::std::fmt::Debug for PrismaClient {
+        fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
             f.debug_struct("PrismaClient").finish()
         }
     }
     impl PrismaClient {
-        pub(super) fn _new_query_context(&self) -> QueryContext {
-            QueryContext::new(&self.executor, self.query_schema.clone())
+        pub(super) fn _new_query_context(&self) -> ::prisma_client_rust::queries::QueryContext {
+            ::prisma_client_rust::queries::QueryContext::new(
+                &self.executor,
+                self.query_schema.clone(),
+            )
         }
         pub(super) fn _new(
-            executor: Box<dyn QueryExecutor + Send + Sync + 'static>,
-            query_schema: Arc<QuerySchema>,
+            executor: Box<
+                dyn ::prisma_client_rust::query_core::QueryExecutor + Send + Sync + 'static,
+            >,
+            query_schema: std::sync::Arc<::prisma_client_rust::schema::QuerySchema>,
         ) -> Self {
             Self {
                 executor,
                 query_schema,
             }
         }
-        pub async fn _query_raw<T: serde::de::DeserializeOwned>(
+        pub fn _query_raw<T: serde::de::DeserializeOwned>(
             &self,
-            query: raw::Raw,
-        ) -> QueryResult<Vec<T>> {
-            QueryRaw::new(
-                QueryContext::new(&self.executor, self.query_schema.clone()),
+            query: ::prisma_client_rust::raw::Raw,
+        ) -> ::prisma_client_rust::QueryRaw<T> {
+            ::prisma_client_rust::QueryRaw::new(
+                ::prisma_client_rust::queries::QueryContext::new(
+                    &self.executor,
+                    self.query_schema.clone(),
+                ),
                 query,
-                DATABASE_STR,
+                super::DATABASE_STR,
             )
-            .exec()
-            .await
         }
-        pub async fn _execute_raw(&self, query: raw::Raw) -> QueryResult<i64> {
-            ExecuteRaw::new(
-                QueryContext::new(&self.executor, self.query_schema.clone()),
+        pub fn _execute_raw(
+            &self,
+            query: ::prisma_client_rust::raw::Raw,
+        ) -> ::prisma_client_rust::ExecuteRaw {
+            ::prisma_client_rust::ExecuteRaw::new(
+                ::prisma_client_rust::queries::QueryContext::new(
+                    &self.executor,
+                    self.query_schema.clone(),
+                ),
                 query,
-                DATABASE_STR,
+                super::DATABASE_STR,
             )
-            .exec()
-            .await
         }
-        pub fn activity(&self) -> activity::Actions {
-            activity::Actions { client: &self }
+        pub async fn _batch<T: ::prisma_client_rust::BatchContainer<Marker>, Marker>(
+            &self,
+            queries: T,
+        ) -> ::prisma_client_rust::queries::Result<T::ReturnType> {
+            ::prisma_client_rust::batch(queries, &self.executor, &self.query_schema).await
         }
-        pub fn device(&self) -> device::Actions {
-            device::Actions { client: &self }
+        pub fn activity(&self) -> super::activity::Actions {
+            super::activity::Actions { client: &self }
         }
-        pub fn device_activity(&self) -> device_activity::Actions {
-            device_activity::Actions { client: &self }
+        pub fn device(&self) -> super::device::Actions {
+            super::device::Actions { client: &self }
         }
-        pub fn user(&self) -> user::Actions {
-            user::Actions { client: &self }
+        pub fn device_activity(&self) -> super::device_activity::Actions {
+            super::device_activity::Actions { client: &self }
+        }
+        pub fn user(&self) -> super::user::Actions {
+            super::user::Actions { client: &self }
         }
     }
-    #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+    #[derive(Debug, Clone, Copy, :: serde :: Serialize, :: serde :: Deserialize)]
     pub enum ActivityScalarFieldEnum {
         #[serde(rename = "ID")]
         Id,
@@ -4190,22 +4411,7 @@ pub mod _prisma {
             }
         }
     }
-    #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-    pub enum DeviceScalarFieldEnum {
-        #[serde(rename = "ID")]
-        Id,
-        #[serde(rename = "Name")]
-        Name,
-    }
-    impl ToString for DeviceScalarFieldEnum {
-        fn to_string(&self) -> String {
-            match self {
-                Self::Id => "ID".to_string(),
-                Self::Name => "Name".to_string(),
-            }
-        }
-    }
-    #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+    #[derive(Debug, Clone, Copy, :: serde :: Serialize, :: serde :: Deserialize)]
     pub enum DeviceActivityScalarFieldEnum {
         #[serde(rename = "ID")]
         Id,
@@ -4229,25 +4435,37 @@ pub mod _prisma {
             }
         }
     }
-    #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-    pub enum UserScalarFieldEnum {
+    #[derive(Debug, Clone, Copy, :: serde :: Serialize, :: serde :: Deserialize)]
+    pub enum DeviceScalarFieldEnum {
         #[serde(rename = "ID")]
         Id,
         #[serde(rename = "Name")]
         Name,
-        #[serde(rename = "ApiKey")]
-        ApiKey,
     }
-    impl ToString for UserScalarFieldEnum {
+    impl ToString for DeviceScalarFieldEnum {
         fn to_string(&self) -> String {
             match self {
                 Self::Id => "ID".to_string(),
                 Self::Name => "Name".to_string(),
-                Self::ApiKey => "ApiKey".to_string(),
             }
         }
     }
-    #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+    #[derive(Debug, Clone, Copy, :: serde :: Serialize, :: serde :: Deserialize)]
+    pub enum QueryMode {
+        #[serde(rename = "default")]
+        Default,
+        #[serde(rename = "insensitive")]
+        Insensitive,
+    }
+    impl ToString for QueryMode {
+        fn to_string(&self) -> String {
+            match self {
+                Self::Default => "default".to_string(),
+                Self::Insensitive => "insensitive".to_string(),
+            }
+        }
+    }
+    #[derive(Debug, Clone, Copy, :: serde :: Serialize, :: serde :: Deserialize)]
     pub enum SortOrder {
         #[serde(rename = "asc")]
         Asc,
@@ -4262,18 +4480,42 @@ pub mod _prisma {
             }
         }
     }
-    #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-    pub enum QueryMode {
-        #[serde(rename = "default")]
-        Default,
-        #[serde(rename = "insensitive")]
-        Insensitive,
+    #[derive(Debug, Clone, Copy, :: serde :: Serialize, :: serde :: Deserialize)]
+    pub enum TransactionIsolationLevel {
+        #[serde(rename = "ReadUncommitted")]
+        ReadUncommitted,
+        #[serde(rename = "ReadCommitted")]
+        ReadCommitted,
+        #[serde(rename = "RepeatableRead")]
+        RepeatableRead,
+        #[serde(rename = "Serializable")]
+        Serializable,
     }
-    impl ToString for QueryMode {
+    impl ToString for TransactionIsolationLevel {
         fn to_string(&self) -> String {
             match self {
-                Self::Default => "default".to_string(),
-                Self::Insensitive => "insensitive".to_string(),
+                Self::ReadUncommitted => "ReadUncommitted".to_string(),
+                Self::ReadCommitted => "ReadCommitted".to_string(),
+                Self::RepeatableRead => "RepeatableRead".to_string(),
+                Self::Serializable => "Serializable".to_string(),
+            }
+        }
+    }
+    #[derive(Debug, Clone, Copy, :: serde :: Serialize, :: serde :: Deserialize)]
+    pub enum UserScalarFieldEnum {
+        #[serde(rename = "ID")]
+        Id,
+        #[serde(rename = "Name")]
+        Name,
+        #[serde(rename = "ApiKey")]
+        ApiKey,
+    }
+    impl ToString for UserScalarFieldEnum {
+        fn to_string(&self) -> String {
+            match self {
+                Self::Id => "ID".to_string(),
+                Self::Name => "Name".to_string(),
+                Self::ApiKey => "ApiKey".to_string(),
             }
         }
     }
